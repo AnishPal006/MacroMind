@@ -139,10 +139,19 @@ class ApiService {
     return this.request("/logs/weekly");
   }
 
+  async getMonthlySummary() {
+    return this.request("/logs/monthly");
+  }
+
   async removeFoodScan(scanId) {
     return this.request(`/logs/scan/${scanId}`, {
       method: "DELETE",
     });
+  }
+
+  async getFoodScans(date) {
+    const query = date ? `?date=${date}` : "";
+    return this.request(`/logs/scans${query}`);
   }
 
   // User endpoints

@@ -11,6 +11,7 @@ import ScannerScreen from "./screens/ScannerScreen";
 import AuthScreen from "./screens/AuthScreen";
 import DashboardScreen from "./screens/DashboardScreen";
 import ProfileScreen from "./screens/ProfileScreen";
+import HistoryScreen from "./screens/HistoryScreen";
 import apiService from "./services/api";
 
 export default function App() {
@@ -69,6 +70,8 @@ export default function App() {
         return <DashboardScreen />;
       case "scanner":
         return <ScannerScreen />;
+      case "history":
+        return <HistoryScreen />;
       case "profile":
         return <ProfileScreen onLogout={handleLogout} />;
       default:
@@ -113,6 +116,23 @@ export default function App() {
             ]}
           >
             📷 Scan
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.navButton,
+            currentTab === "history" && styles.navButtonActive,
+          ]}
+          onPress={() => setCurrentTab("history")}
+        >
+          <Text
+            style={[
+              styles.navButtonText,
+              currentTab === "history" && styles.navButtonTextActive,
+            ]}
+          >
+            📜 History
           </Text>
         </TouchableOpacity>
 
@@ -173,7 +193,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#007AFF",
   },
   navButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#6b7280",
     fontWeight: "600",
   },
