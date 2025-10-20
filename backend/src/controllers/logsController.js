@@ -3,119 +3,127 @@ const DailyLog = require("../models/DailyLog");
 const User = require("../models/User");
 const Food = require("../models/Food");
 const { Op } = require("sequelize");
+const { sequelize } = require("../config/database");
 
 // Get daily summary
 exports.getDailySummary = async (req, res) => {
+  const t = await sequelize.transaction(); // Optional: Use a transaction for consistency
   try {
     const { date } = req.query;
     const userId = req.userId;
     const queryDate = date || new Date().toISOString().split("T")[0];
 
-    // Get or create daily log
-    let dailyLog = await DailyLog.findOne({
-      where: { userId, date: queryDate },
+    // 1. Always fetch all scans for the user and date
+    const scans = await FoodScan.findAll({
+      where: { userId, scanDate: queryDate },
+      include: [{ model: Food, as: "food" }],
+      transaction: t, // Include in transaction
     });
 
-    if (!dailyLog) {
-      // Fetch scans for this date and calculate totals
-      const scans = await FoodScan.findAll({
-        where: { userId, scanDate: queryDate },
-        include: [{ model: Food, as: "food" }],
-      });
+    // 2. Calculate current totals based on fetched scans
+    let currentTotals = {
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fats: 0,
+      fiber: 0,
+      // Water intake might need separate handling if not derived from scans
+    };
 
-      if (scans.length === 0) {
-        return res.status(200).json({
-          success: true,
-          data: {
-            date: queryDate,
-            totalCalories: 0,
-            totalProtein: 0,
-            totalCarbs: 0,
-            totalFats: 0,
-            waterIntakeMl: 0,
-            meals: {
-              breakfast: [],
-              lunch: [],
-              dinner: [],
-              snack: [],
-            },
-            summary: {
-              calories: 0,
-              protein: 0,
-              carbs: 0,
-              fats: 0,
-            },
-          },
-        });
+    const mealsBreakdown = {
+      // Initialize meal breakdown structure
+      breakfast: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+      lunch: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+      dinner: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+      snack: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+    };
+
+    scans.forEach((scan) => {
+      // Ensure scan.food exists before accessing its properties
+      if (!scan.food) {
+        console.warn(`Scan ${scan.id} is missing associated food data.`);
+        return; // Skip this scan if food data is missing
       }
-
-      // Calculate totals
-      let totals = {
-        calories: 0,
-        protein: 0,
-        carbs: 0,
-        fats: 0,
-        fiber: 0,
+      const multiplier = scan.quantityGrams / 100;
+      const nutrition = {
+        calories: Math.round((scan.food.caloriesPer100g || 0) * multiplier),
+        protein: parseFloat(
+          ((scan.food.proteinGrams || 0) * multiplier).toFixed(2)
+        ),
+        carbs: parseFloat(
+          ((scan.food.carbsGrams || 0) * multiplier).toFixed(2)
+        ),
+        fats: parseFloat(((scan.food.fatsGrams || 0) * multiplier).toFixed(2)),
+        fiber: parseFloat(
+          ((scan.food.fiberGrams || 0) * multiplier).toFixed(2)
+        ),
       };
 
-      const meals = {
-        breakfast: [],
-        lunch: [],
-        dinner: [],
-        snack: [],
-      };
+      currentTotals.calories += nutrition.calories;
+      currentTotals.protein += nutrition.protein;
+      currentTotals.carbs += nutrition.carbs;
+      currentTotals.fats += nutrition.fats;
+      currentTotals.fiber += nutrition.fiber;
 
-      scans.forEach((scan) => {
-        const multiplier = scan.quantityGrams / 100;
-        const nutrition = {
-          calories: Math.round(scan.food.caloriesPer100g * multiplier),
-          protein: parseFloat((scan.food.proteinGrams * multiplier).toFixed(2)),
-          carbs: parseFloat((scan.food.carbsGrams * multiplier).toFixed(2)),
-          fats: parseFloat((scan.food.fatsGrams * multiplier).toFixed(2)),
-          fiber: parseFloat((scan.food.fiberGrams * multiplier).toFixed(2)),
-        };
+      // Accumulate meal breakdown
+      if (mealsBreakdown[scan.mealType]) {
+        mealsBreakdown[scan.mealType].calories += nutrition.calories;
+        mealsBreakdown[scan.mealType].protein += nutrition.protein;
+        mealsBreakdown[scan.mealType].carbs += nutrition.carbs;
+        mealsBreakdown[scan.mealType].fats += nutrition.fats;
+      }
+    });
 
-        totals.calories += nutrition.calories;
-        totals.protein += nutrition.protein;
-        totals.carbs += nutrition.carbs;
-        totals.fats += nutrition.fats;
-        totals.fiber += nutrition.fiber;
-
-        meals[scan.mealType].push({
-          id: scan.id,
-          food: scan.food.name,
-          quantity: scan.quantityGrams,
-          nutrition,
-          allergenWarning: scan.allergenWarning,
-        });
-      });
-
-      // Create daily log record
-      dailyLog = await DailyLog.create({
+    // 3. Find or Create the DailyLog entry and Update it
+    const [dailyLog, created] = await DailyLog.findOrCreate({
+      where: { userId, date: queryDate },
+      defaults: {
         userId,
         date: queryDate,
-        totalCalories: totals.calories,
-        totalProtein: totals.protein,
-        totalCarbs: totals.carbs,
-        totalFats: totals.fats,
-        totalFiber: totals.fiber,
-      });
+        totalCalories: currentTotals.calories,
+        totalProtein: currentTotals.protein,
+        totalCarbs: currentTotals.carbs,
+        totalFats: currentTotals.fats,
+        totalFiber: currentTotals.fiber,
+        // waterIntakeMl: dailyLog?.waterIntakeMl || 0, // Preserve existing water or default to 0
+        mealBreakdown: mealsBreakdown, // Store the calculated breakdown
+      },
+      transaction: t, // Include in transaction
+    });
+
+    // If the log already existed, update it with the fresh totals
+    if (!created) {
+      dailyLog.totalCalories = currentTotals.calories;
+      dailyLog.totalProtein = currentTotals.protein;
+      dailyLog.totalCarbs = currentTotals.carbs;
+      dailyLog.totalFats = currentTotals.fats;
+      dailyLog.totalFiber = currentTotals.fiber;
+      // Note: Water intake needs separate update logic if it's logged independently
+      // dailyLog.waterIntakeMl = updatedWaterIntake;
+      dailyLog.mealBreakdown = mealsBreakdown; // Update meal breakdown too
+      await dailyLog.save({ transaction: t }); // Save changes within transaction
     }
 
-    // Get user goals
-    const user = await User.findByPk(userId);
+    // 4. Get user goals
+    const user = await User.findByPk(userId, { transaction: t }); // Fetch user within transaction
+    if (!user) {
+      throw new Error("User not found"); // Should not happen if authMiddleware is working
+    }
 
+    await t.commit(); // Commit the transaction
+
+    // 5. Return the updated summary
     return res.status(200).json({
       success: true,
       data: {
         date: queryDate,
         totals: {
           calories: dailyLog.totalCalories,
-          protein: dailyLog.totalProtein,
-          carbs: dailyLog.totalCarbs,
-          fats: dailyLog.totalFats,
-          fiber: dailyLog.totalFiber,
-          water: dailyLog.waterIntakeMl,
+          protein: parseFloat(dailyLog.totalProtein.toFixed(1)), // Format output
+          carbs: parseFloat(dailyLog.totalCarbs.toFixed(1)),
+          fats: parseFloat(dailyLog.totalFats.toFixed(1)),
+          fiber: parseFloat(dailyLog.totalFiber.toFixed(1)),
+          water: dailyLog.waterIntakeMl, // Use the value from the log
         },
         goals: {
           calories: user.dailyCaloricGoal,
@@ -125,22 +133,34 @@ exports.getDailySummary = async (req, res) => {
           water: user.waterIntakeGoalMl,
         },
         progress: {
-          caloriePercent: Math.round(
-            (dailyLog.totalCalories / user.dailyCaloricGoal) * 100
-          ),
-          proteinPercent: Math.round(
-            (dailyLog.totalProtein / user.proteinGoalGrams) * 100
-          ),
-          carbsPercent: Math.round(
-            (dailyLog.totalCarbs / user.carbsGoalGrams) * 100
-          ),
-          fatsPercent: Math.round(
-            (dailyLog.totalFats / user.fatsGoalGrams) * 100
-          ),
+          // Ensure goals are not zero before calculating percentage
+          caloriePercent:
+            user.dailyCaloricGoal > 0
+              ? Math.round(
+                  (dailyLog.totalCalories / user.dailyCaloricGoal) * 100
+                )
+              : 0,
+          proteinPercent:
+            user.proteinGoalGrams > 0
+              ? Math.round(
+                  (dailyLog.totalProtein / user.proteinGoalGrams) * 100
+                )
+              : 0,
+          carbsPercent:
+            user.carbsGoalGrams > 0
+              ? Math.round((dailyLog.totalCarbs / user.carbsGoalGrams) * 100)
+              : 0,
+          fatsPercent:
+            user.fatsGoalGrams > 0
+              ? Math.round((dailyLog.totalFats / user.fatsGoalGrams) * 100)
+              : 0,
         },
+        // Optionally include mealsBreakdown if the frontend needs it
+        mealBreakdown: dailyLog.mealBreakdown,
       },
     });
   } catch (err) {
+    await t.rollback(); // Rollback transaction on error
     console.error("Get daily summary error:", err);
     res.status(500).json({
       success: false,
