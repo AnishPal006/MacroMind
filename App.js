@@ -6,12 +6,14 @@ import {
   TouchableOpacity,
   Text,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import ScannerScreen from "./screens/ScannerScreen";
 import AuthScreen from "./screens/AuthScreen";
 import DashboardScreen from "./screens/DashboardScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import HistoryScreen from "./screens/HistoryScreen";
+import InventoryScreen from "./screens/InventoryScreen"; // <-- Import InventoryScreen
 import apiService from "./services/api";
 
 export default function App() {
@@ -72,6 +74,8 @@ export default function App() {
         return <ScannerScreen />;
       case "history":
         return <HistoryScreen />;
+      case "inventory": // <-- Add case for Inventory
+        return <InventoryScreen />;
       case "profile":
         return <ProfileScreen onLogout={handleLogout} />;
       default:
@@ -139,6 +143,23 @@ export default function App() {
         <TouchableOpacity
           style={[
             styles.navButton,
+            currentTab === "inventory" && styles.navButtonActive,
+          ]}
+          onPress={() => setCurrentTab("inventory")}
+        >
+          <Text
+            style={[
+              styles.navButtonText,
+              currentTab === "inventory" && styles.navButtonTextActive,
+            ]}
+          >
+            🧺 Inventory {/* Example Icon */}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.navButton,
             currentTab === "profile" && styles.navButtonActive,
           ]}
           onPress={() => setCurrentTab("profile")}
@@ -175,29 +196,37 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderTopWidth: 1,
     borderTopColor: "#e5e7eb",
-    paddingBottom: 20,
+    paddingBottom: Platform.OS === "ios" ? 30 : 20, // More padding for iOS home indicator
     paddingTop: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
+    shadowOpacity: 0.05, // Subtle shadow
+    shadowRadius: 5,
+    elevation: 8,
   },
   navButton: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 8, // Adjust vertical padding
   },
   navButtonActive: {
-    borderBottomWidth: 3,
-    borderBottomColor: "#007AFF",
+    // Optional: Use a different indicator like background color or borderTopWidth
+    backgroundColor: "#eef2ff", // Example active background
+    borderTopWidth: 3, // Example active border top
+    borderTopColor: "#007AFF",
+    paddingTop: 7, // Adjust padding if using borderTop
+    // Remove bottom border if using top border or background
+    // borderBottomWidth: 3,
+    // borderBottomColor: "#007AFF",
   },
   navButtonText: {
-    fontSize: 12,
+    fontSize: 11, // Slightly smaller font size for 5 tabs
     color: "#6b7280",
     fontWeight: "600",
+    textAlign: "center", // Ensure text centers if it wraps
   },
   navButtonTextActive: {
     color: "#007AFF",
+    fontWeight: "700", // Make active text bolder
   },
 });

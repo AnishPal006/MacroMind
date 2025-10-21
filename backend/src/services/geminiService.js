@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Food = require("../models/Food");
+const InventoryItem = require("../models/InventoryItem");
 const { Op } = require("sequelize");
 
 // Initialize Gemini API
@@ -222,38 +223,112 @@ exports.calculateNutritionForQuantity = (food, quantityGrams) => {
 };
 
 // Get meal suggestions based on inventory
-exports.getMealSuggestions = async (availableIngredients) => {
+exports.getMealSuggestions = async (userId) => {
+  // Accept userId
+  if (!userId) {
+    console.error("User ID is required for meal suggestions.");
+    return [];
+  }
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    // 1. Fetch user's inventory items
+    const inventoryItems = await InventoryItem.findAll({
+      where: { userId: userId },
+      attributes: ["itemName"], // Only need the names
+      // Optionally filter out items with zero quantity if needed
+      // where: { userId: userId, quantity: { [Op.gt]: 0 } }
+    });
 
-    const ingredientList = availableIngredients.join(", ");
+    if (!inventoryItems || inventoryItems.length === 0) {
+      console.log("No inventory items found for user:", userId);
+      // Return an empty array or a specific message object
+      return [
+        { message: "Your inventory is empty. Add items to get suggestions." },
+      ];
+    }
 
-    const prompt = `Based on these available ingredients: ${ingredientList}
-    
-    Suggest 3 healthy meal ideas. Return ONLY a JSON array with this structure (no markdown):
+    // 2. Format ingredient list from inventory item names
+    // Use Set to get unique item names
+    const uniqueItemNames = [
+      ...new Set(inventoryItems.map((item) => item.itemName)),
+    ];
+    const ingredientList = uniqueItemNames.join(", ");
+
+    // 3. Call Gemini API
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // Or gemini-1.5-flash
+
+    const prompt = `Based ONLY on these available ingredients: ${ingredientList}
+
+    Suggest up to 3 healthy and simple meal ideas (breakfast, lunch, or dinner) that primarily use these ingredients. Be creative but realistic. If very few ingredients are available, it's okay to suggest simple snacks or indicate limited options.
+
+    Return ONLY a valid JSON array with this exact structure (no markdown formatting, no extra text):
     [
       {
-        "mealName": "name",
-        "description": "brief description",
-        "ingredients": ["ingredient1", "ingredient2"],
-        "estimatedCalories": number,
-        "preparationTime": "30 mins",
-        "healthRating": "★★★★★"
+        "mealName": "Name of the meal",
+        "description": "Brief description (1-2 sentences)",
+        "primaryIngredients": ["ingredient1 from list", "ingredient2 from list"],
+        "estimatedPrepTime": "e.g., 15 mins",
+        "type": "Breakfast | Lunch | Dinner | Snack"
       }
     ]
-    
-    Make suggestions balanced and nutritious.`;
 
-    const response = await model.generateContent(prompt);
-    const responseText = response.response.text();
-    const suggestions = parseGeminiResponse(
-      responseText.replace("[\n", "[").replace("\n]", "]")
-    );
+    Focus on using the provided ingredients. If essential common pantry staples (like oil, salt, pepper, basic spices) are obviously needed but not listed, you can assume they are available but don't list them in primaryIngredients. If not enough ingredients are available for full meals, suggest simple combinations or state that. If the list is empty or nonsensical, return an empty array or a message indicating so within the structure.`;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+
+    // Clean up potential markdown formatting around the JSON
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    let suggestions = [];
+    if (jsonMatch) {
+      try {
+        suggestions = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error(
+          "Failed to parse meal suggestions JSON:",
+          parseError,
+          "Raw response:",
+          responseText
+        );
+        suggestions = [
+          {
+            mealName: "Error",
+            description: "Could not parse suggestions.",
+            primaryIngredients: [],
+            estimatedPrepTime: "",
+            type: "Error",
+          },
+        ];
+      }
+    } else {
+      console.warn(
+        "No valid JSON array found in meal suggestions response:",
+        responseText
+      );
+      suggestions = [
+        {
+          mealName: "Info",
+          description:
+            "Could not generate suggestions based on current inventory.",
+          primaryIngredients: [],
+          estimatedPrepTime: "",
+          type: "Info",
+        },
+      ];
+    }
 
     return Array.isArray(suggestions) ? suggestions : [];
   } catch (err) {
     console.error("Get meal suggestions error:", err.message);
-    return [];
+    // Return an error indication in the expected format
+    return [
+      {
+        mealName: "Error",
+        description: "Failed to generate suggestions due to an error.",
+        primaryIngredients: [],
+        estimatedPrepTime: "",
+        type: "Error",
+      },
+    ];
   }
 };
 

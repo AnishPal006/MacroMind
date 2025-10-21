@@ -176,6 +176,33 @@ class ApiService {
       body: JSON.stringify(goalsData),
     });
   }
+  async getInventory() {
+    return this.request("/inventory/"); // GET request to fetch all items
+  }
+
+  async addInventoryItem(itemData) {
+    return this.request("/inventory/", {
+      method: "POST",
+      body: JSON.stringify(itemData),
+    });
+  }
+
+  async updateInventoryItem(itemId, itemData) {
+    return this.request(`/inventory/${itemId}`, {
+      method: "PUT",
+      body: JSON.stringify(itemData),
+    });
+  }
+
+  async deleteInventoryItem(itemId) {
+    return this.request(`/inventory/${itemId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getMealSuggestions() {
+    return this.request("/inventory/suggestions"); // GET request
+  }
 }
 
 export default new ApiService();
