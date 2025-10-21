@@ -4,9 +4,18 @@ const { generateToken } = require("../middleware/auth");
 // Register new user
 exports.register = async (req, res) => {
   try {
-    const { email, password, fullName, age, gender } = req.body;
+    // Destructure new fields from req.body
+    const {
+      email,
+      password,
+      fullName,
+      age,
+      gender,
+      allergies,
+      healthConditions,
+    } = req.body;
 
-    // Validate input
+    // Keep existing validation
     if (!email || !password || !fullName) {
       return res.status(400).json({
         success: false,
@@ -30,6 +39,10 @@ exports.register = async (req, res) => {
       fullName,
       age,
       gender,
+      // Assign the arrays received from the frontend
+      allergies: allergies || [], // Ensure it's an array, default empty
+      healthConditions: healthConditions || [], // Ensure it's an array, default empty
+      // Keep default goals
       dailyCaloricGoal: 2000,
       proteinGoalGrams: 50,
       carbsGoalGrams: 250,
@@ -43,7 +56,7 @@ exports.register = async (req, res) => {
       success: true,
       message: "User registered successfully",
       data: {
-        user: user.toJSON(),
+        user: user.toJSON(), // toJSON already removes password
         token,
       },
     });
@@ -52,7 +65,7 @@ exports.register = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Registration failed",
-      error: err.message,
+      error: err.message, // Provide error message
     });
   }
 };

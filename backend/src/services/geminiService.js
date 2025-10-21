@@ -257,4 +257,99 @@ exports.getMealSuggestions = async (availableIngredients) => {
   }
 };
 
+exports.getHealthAdvice = async (food, user) => {
+  if (!food || !user) {
+    console.warn("Missing food or user data for health advice.");
+    return {
+      suitability: "neutral",
+      reason: "Could not determine suitability due to missing data.",
+    };
+  }
+
+  try {
+    // Use a model suitable for text analysis (e.g., gemini-1.5-flash or gemini-pro)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // Or "gemini-pro"
+
+    // Construct the prompt
+    const prompt = `
+        Analyze the suitability of the following food for a specific user.
+
+        Food Details:
+        Name: ${food.name || "N/A"}
+        Category: ${food.category || "N/A"}
+        Calories (per 100g): ${food.caloriesPer100g || "N/A"}
+        Protein (per 100g): ${food.proteinGrams || "N/A"}g
+        Carbs (per 100g): ${food.carbsGrams || "N/A"}g
+        Sugar (per 100g): ${food.sugarGrams || "N/A"}g
+        Fats (per 100g): ${food.fatsGrams || "N/A"}g
+        Sodium (per 100g): ${food.sodiumMg || "N/A"}mg
+        Fiber (per 100g): ${food.fiberGrams || "N/A"}g
+        Ingredients: ${
+          food.ingredients && food.ingredients.length > 0
+            ? food.ingredients.join(", ")
+            : "N/A"
+        }
+        Listed Allergens: ${
+          food.allergens && food.allergens.length > 0
+            ? food.allergens.join(", ")
+            : "None"
+        }
+
+        User Health Profile:
+        Allergies: ${
+          user.allergies && user.allergies.length > 0
+            ? user.allergies.join(", ")
+            : "None specified"
+        }
+        Health Conditions: ${
+          user.healthConditions && user.healthConditions.length > 0
+            ? user.healthConditions.join(", ")
+            : "None specified"
+        }
+
+        Based ONLY on the provided information, determine if this food is generally "good", "bad", or "neutral" for this user.
+        - Prioritize allergies: If any listed food allergen matches a user allergy, suitability MUST be "bad". Check ingredients for potential hidden allergens if possible based on common names.
+        - Consider health conditions:
+            - If user has 'diabetes', flag foods very high in sugar or refined carbs as potentially "bad".
+            - If user has 'high_cholesterol', flag foods potentially high in saturated/trans fats (infer if necessary, e.g., fried foods, fatty meats) as potentially "bad".
+            - If user has 'hypertension' or 'high_blood_pressure', flag foods very high in sodium as potentially "bad".
+        - If no strong conflicts exist, consider it "good" if it's generally nutritious (high fiber, protein, low sugar/sodium) or "neutral" otherwise (e.g., okay in moderation, processed snacks).
+
+        Return ONLY a valid JSON object with the following structure (no markdown formatting, no extra text):
+        {
+          "suitability": "good" | "bad" | "neutral",
+          "reason": "A brief, user-friendly explanation (1-2 sentences max) justifying the suitability based on the user's profile and the food's content. Mention specific conflicts like allergies or high sugar/sodium if applicable."
+        }
+        `;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    const advice = parseGeminiResponse(responseText); // Use existing parser
+
+    if (
+      advice &&
+      ["good", "bad", "neutral"].includes(advice.suitability) &&
+      advice.reason
+    ) {
+      return advice;
+    } else {
+      console.warn(
+        "Failed to parse valid health advice from Gemini response:",
+        responseText
+      );
+      return {
+        suitability: "neutral",
+        reason: "Could not automatically determine suitability.",
+      };
+    }
+  } catch (err) {
+    console.error("Gemini health advice error:", err.message);
+    // Return a default neutral response in case of API error
+    return {
+      suitability: "neutral",
+      reason: "Could not analyze health suitability due to an error.",
+    };
+  }
+};
+
 module.exports = exports;

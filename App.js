@@ -67,7 +67,7 @@ export default function App() {
   const renderScreen = () => {
     switch (currentTab) {
       case "dashboard":
-        return <DashboardScreen />;
+        return <DashboardScreen currentUser={currentUser} />;
       case "scanner":
         return <ScannerScreen />;
       case "history":
@@ -75,7 +75,7 @@ export default function App() {
       case "profile":
         return <ProfileScreen onLogout={handleLogout} />;
       default:
-        return <DashboardScreen />;
+        return <DashboardScreen currentUser={currentUser} />;
     }
   };
 

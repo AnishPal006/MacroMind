@@ -59,7 +59,7 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 
 sequelize
-  .sync({ alter: process.env.NODE_ENV === "development" })
+  .sync()
   .then(() => {
     console.log("Database synced successfully");
     app.listen(PORT, () => {

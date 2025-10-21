@@ -22,17 +22,19 @@ export default function AuthScreen({ onAuthSuccess }) {
     password: "",
     fullName: "",
     age: "",
-    gender: "other",
+    gender: "other", // Default value
+    allergiesInput: "", // New field for comma-separated allergies
+    healthConditionsInput: "", // New field for comma-separated conditions (e.g., diabetes, high_cholesterol)
   });
 
   const handleSubmit = async () => {
-    if (!formData.email || !formData.password) {
-      Alert.alert("Error", "Please fill in all required fields");
-      return;
-    }
-
-    if (!isLogin && !formData.fullName) {
-      Alert.alert("Error", "Please enter your full name");
+    // Basic validation (keep existing checks)
+    if (
+      !formData.email ||
+      !formData.password ||
+      (!isLogin && !formData.fullName)
+    ) {
+      Alert.alert("Error", "Please fill in Email, Password, and Full Name");
       return;
     }
 
@@ -42,20 +44,36 @@ export default function AuthScreen({ onAuthSuccess }) {
       if (isLogin) {
         response = await apiService.login(formData.email, formData.password);
       } else {
+        // Prepare arrays from comma-separated strings
+        const allergies = formData.allergiesInput
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const healthConditions = formData.healthConditionsInput
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean); // Store conditions in lowercase
+
         response = await apiService.register({
           email: formData.email,
           password: formData.password,
           fullName: formData.fullName,
           age: formData.age ? parseInt(formData.age) : null,
           gender: formData.gender,
+          allergies: allergies, // Pass as array
+          healthConditions: healthConditions, // Pass as array
         });
       }
 
       if (response.success) {
         Alert.alert("Success", response.message);
         onAuthSuccess?.(response.data.user);
+      } else {
+        // Handle specific backend errors if needed
+        throw new Error(response.message || "Authentication failed");
       }
     } catch (error) {
+      console.error("Auth Error:", error); // Log the full error
       Alert.alert("Error", error.message || "Authentication failed");
     } finally {
       setLoading(false);
@@ -80,7 +98,7 @@ export default function AuthScreen({ onAuthSuccess }) {
             {!isLogin && (
               <TextInput
                 style={styles.input}
-                placeholder="Full Name"
+                placeholder="Full Name *"
                 value={formData.fullName}
                 onChangeText={(text) =>
                   setFormData({ ...formData, fullName: text })
@@ -91,7 +109,7 @@ export default function AuthScreen({ onAuthSuccess }) {
 
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="Email *"
               value={formData.email}
               onChangeText={(text) => setFormData({ ...formData, email: text })}
               keyboardType="email-address"
@@ -100,7 +118,7 @@ export default function AuthScreen({ onAuthSuccess }) {
 
             <TextInput
               style={styles.input}
-              placeholder="Password"
+              placeholder="Password *"
               value={formData.password}
               onChangeText={(text) =>
                 setFormData({ ...formData, password: text })
@@ -110,48 +128,55 @@ export default function AuthScreen({ onAuthSuccess }) {
 
             {!isLogin && (
               <>
+                {/* Keep Age and Gender inputs */}
                 <TextInput
                   style={styles.input}
                   placeholder="Age (optional)"
                   value={formData.age}
                   onChangeText={(text) =>
-                    setFormData({ ...formData, age: text })
-                  }
+                    setFormData({
+                      ...formData,
+                      age: text.replace(/[^0-9]/g, ""),
+                    })
+                  } // Only allow numbers
                   keyboardType="numeric"
                 />
-
                 <View style={styles.genderContainer}>
-                  <Text style={styles.label}>Gender:</Text>
-                  <View style={styles.genderButtons}>
-                    {["male", "female", "other"].map((gender) => (
-                      <TouchableOpacity
-                        key={gender}
-                        style={[
-                          styles.genderButton,
-                          formData.gender === gender &&
-                            styles.genderButtonActive,
-                        ]}
-                        onPress={() => setFormData({ ...formData, gender })}
-                      >
-                        <Text
-                          style={[
-                            styles.genderButtonText,
-                            formData.gender === gender &&
-                              styles.genderButtonTextActive,
-                          ]}
-                        >
-                          {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {/* ... Gender Buttons ... */}
                 </View>
+
+                {/* New Health Fields */}
+                <Text style={styles.label}>
+                  Allergies (comma-separated, e.g., peanuts, dairy)
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Peanuts, Shellfish"
+                  value={formData.allergiesInput}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, allergiesInput: text })
+                  }
+                  autoCapitalize="words"
+                />
+
+                <Text style={styles.label}>
+                  Health Conditions (comma-separated)
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Diabetes, High Cholesterol"
+                  value={formData.healthConditionsInput}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, healthConditionsInput: text })
+                  }
+                  autoCapitalize="words" // Capitalize words, but we'll lowercase conditions later
+                />
               </>
             )}
 
             <TouchableOpacity
               style={[
-                styles.submitButton,
+                styles.submitButton, // Style for the blue button
                 loading && styles.submitButtonDisabled,
               ]}
               onPress={handleSubmit}
@@ -160,6 +185,7 @@ export default function AuthScreen({ onAuthSuccess }) {
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
+                // THIS PART SHOULD BE RENDERING THE TEXT
                 <Text style={styles.submitButtonText}>
                   {isLogin ? "Login" : "Sign Up"}
                 </Text>
@@ -172,7 +198,7 @@ export default function AuthScreen({ onAuthSuccess }) {
             >
               <Text style={styles.switchButtonText}>
                 {isLogin
-                  ? "Don't have an account? Sign Up"
+                  ? "Don't have an account? Sign Up" // This text should appear in login mode
                   : "Already have an account? Login"}
               </Text>
             </TouchableOpacity>
@@ -223,9 +249,11 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
   },
   label: {
-    fontSize: 16,
+    fontSize: 14, // Slightly smaller label
+    fontWeight: "600",
     color: "#4b5563",
-    marginBottom: 8,
+    marginBottom: 6,
+    marginLeft: 4, // Align with input padding
   },
   genderContainer: {
     marginBottom: 15,
@@ -267,16 +295,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#9ca3af",
   },
   submitButtonText: {
-    color: "white",
+    color: "white", // Text color is white
     fontSize: 18,
     fontWeight: "bold",
   },
   switchButton: {
-    marginTop: 20,
+    marginTop: 20, // Should have space above it
     alignItems: "center",
   },
   switchButtonText: {
-    color: "#007AFF",
+    color: "#007AFF", // Text color is blue
     fontSize: 16,
   },
 });

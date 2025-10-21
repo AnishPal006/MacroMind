@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import apiService from "../services/api";
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ currentUser }) {
   const [dailySummary, setDailySummary] = useState(null);
   const [loading, setLoading] = useState(true); // Still useful for initial load
   const [refreshing, setRefreshing] = useState(false);
@@ -122,12 +122,15 @@ export default function DashboardScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#007AFF"]} // Customize refresh indicator color
+            colors={["#007AFF"]}
           />
         }
       >
-        {/* Header */}
         <View style={styles.header}>
+          {/* Add Welcome Message */}
+          <Text style={styles.welcomeMessage}>
+            Welcome, {currentUser?.fullName || "User"}! 👋
+          </Text>
           <Text style={styles.title}>Daily Summary</Text>
           <Text style={styles.date}>{displayDate}</Text>
         </View>
@@ -257,6 +260,15 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 24,
+    paddingBottom: 10, // Add some padding below the header content
+    borderBottomWidth: 1, // Optional: Add a separator line
+    borderBottomColor: "#e5e7eb", // Optional: Separator color
+  },
+  welcomeMessage: {
+    fontSize: 20, // Adjust size as needed
+    fontWeight: "600", // Semi-bold
+    color: "#374151", // Darker gray
+    marginBottom: 12, // Space below welcome message
   },
   title: {
     fontSize: 28,

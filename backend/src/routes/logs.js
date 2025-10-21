@@ -55,11 +55,14 @@ router.get("/scans", async (req, res) => {
             "proteinGrams",
             "carbsGrams",
             "fatsGrams",
+            "fiberGrams",
+            "sugarGrams",
+            "sodiumMg",
             "allergens",
           ],
         },
       ],
-      order: [["scanDate", "DESC"]],
+      order: [["scannedAt", "DESC"]],
     });
 
     res.status(200).json({

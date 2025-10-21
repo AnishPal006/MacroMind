@@ -65,6 +65,16 @@ const FoodScan = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    healthSuitability: {
+      type: DataTypes.ENUM("good", "bad", "neutral"),
+      allowNull: true, // Allow null if advice generation fails
+      comment: "Suitability rating based on user profile at scan time",
+    },
+    healthReason: {
+      type: DataTypes.TEXT,
+      allowNull: true, // Allow null if advice generation fails
+      comment: "Reason for the health suitability rating",
+    },
     createdAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

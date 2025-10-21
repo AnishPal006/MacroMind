@@ -21,7 +21,7 @@ export default function HistoryScreen() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedScan, setSelectedScan] = useState(null); // State for selected scan details
+  const [selectedScan, setSelectedScan] = useState(null); // Holds formatted data for display
 
   // Fetch history data
   const loadHistory = useCallback(async (isRefreshing = false) => {
@@ -49,9 +49,9 @@ export default function HistoryScreen() {
   }, []); // Empty dependency array, created once
 
   // Load history when the component mounts
-  useEffect(() => {
-    loadHistory();
-  }, [loadHistory]); // Run once on mount
+  // useEffect(() => {
+  //   loadHistory();
+  // }, [loadHistory]); // Run once on mount
 
   // Transform scan data into sections grouped by date
   const transformHistoryData = (scans) => {
@@ -90,6 +90,10 @@ export default function HistoryScreen() {
         ),
       }));
   };
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
   // Handler for pull-to-refresh
   const onRefresh = () => {
@@ -145,13 +149,23 @@ export default function HistoryScreen() {
       additionalInfo: scan.allergenWarning
         ? `⚠️ Allergen Warning: Contains potential allergens relevant to you.`
         : `Category: ${scan.food.category || "N/A"}`,
+      healthAdvice:
+        scan.healthSuitability && scan.healthReason
+          ? { suitability: scan.healthSuitability, reason: scan.healthReason }
+          : {
+              suitability: "neutral",
+              reason: "Health advice not recorded for this scan.",
+            }, // Default if missing
     };
   };
 
   // Handle item press to show details
-  const handleItemPress = (item) => {
-    const formattedData = formatScanForDisplay(item);
-    setSelectedScan(formattedData);
+  const handleItemPress = async (item) => {
+    if (!item || !item.foodId) return;
+
+    // 1. Show basic details immediately
+    const basicFormattedData = formatScanForDisplay(item);
+    setSelectedScan(basicFormattedData); // Show nutrition info without advice yet
   };
 
   // Handle deleting an item
@@ -301,7 +315,8 @@ export default function HistoryScreen() {
       {selectedScan && (
         <NutritionDisplay
           data={selectedScan}
-          onClose={() => setSelectedScan(null)} // Close by clearing the state
+          onClose={() => setSelectedScan(null)}
+          closeButtonLabel="CLOSE" // <--- This tells it to display "CLOSE"
         />
       )}
     </SafeAreaView>

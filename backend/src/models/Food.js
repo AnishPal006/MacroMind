@@ -88,7 +88,13 @@ const Food = sequelize.define(
       allowNull: true,
     },
     source: {
-      type: DataTypes.ENUM("usda", "nutritionix", "user_input", "manual"),
+      type: DataTypes.ENUM(
+        "usda",
+        "nutritionix",
+        "user_input",
+        "manual",
+        "gemini"
+      ), // <-- Added 'gemini
       defaultValue: "manual",
     },
     sourceId: {

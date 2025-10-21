@@ -19,9 +19,9 @@ export default function ProfileScreen({ onLogout }) {
     fullName: "",
     age: "",
     gender: "other",
-    healthConditions: [],
-    allergies: [],
-    dietaryPreferences: [],
+    // Use strings for input, derive from arrays fetched from API
+    healthConditionsInput: "",
+    allergiesInput: "",
   });
   const [goals, setGoals] = useState({
     dailyCaloricGoal: "",
@@ -47,9 +47,11 @@ export default function ProfileScreen({ onLogout }) {
           fullName: profileRes.data.fullName || "",
           age: profileRes.data.age?.toString() || "",
           gender: profileRes.data.gender || "other",
-          healthConditions: profileRes.data.healthConditions || [],
-          allergies: profileRes.data.allergies || [],
-          dietaryPreferences: profileRes.data.dietaryPreferences || [],
+          // Convert arrays to comma-separated strings for input fields
+          healthConditionsInput: (profileRes.data.healthConditions || []).join(
+            ", "
+          ),
+          allergiesInput: (profileRes.data.allergies || []).join(", "),
         });
       }
 
@@ -72,20 +74,42 @@ export default function ProfileScreen({ onLogout }) {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
+      // Convert input strings back to arrays, trimming whitespace and filtering empty strings
+      const healthConditionsArray = profile.healthConditionsInput
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const allergiesArray = profile.allergiesInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       const profileData = {
         fullName: profile.fullName,
         age: profile.age ? parseInt(profile.age) : null,
         gender: profile.gender,
-        healthConditions: profile.healthConditions,
-        allergies: profile.allergies,
-        dietaryPreferences: profile.dietaryPreferences,
+        healthConditions: healthConditionsArray, // Send array
+        allergies: allergiesArray, // Send array
+        // dietaryPreferences are not in the state/form currently, add if needed
       };
 
       const response = await apiService.updateProfile(profileData);
       if (response.success) {
         Alert.alert("Success", "Profile updated successfully");
+        // Optionally update local state again from response if needed, though loadProfile on focus would handle it
+        setProfile({
+          // Update local state to reflect saved data format
+          ...profile, // Keep existing fields like name, age, gender
+          healthConditionsInput: (response.data.healthConditions || []).join(
+            ", "
+          ),
+          allergiesInput: (response.data.allergies || []).join(", "),
+        });
+      } else {
+        throw new Error(response.message || "Failed to update profile");
       }
     } catch (error) {
+      console.error("Update Profile Error:", error);
       Alert.alert("Error", error.message || "Failed to update profile");
     } finally {
       setSaving(false);
@@ -145,6 +169,7 @@ export default function ProfileScreen({ onLogout }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personal Information</Text>
 
+          <Text style={styles.label}>Full Name</Text>
           <TextInput
             style={styles.input}
             placeholder="Full Name"
@@ -152,11 +177,14 @@ export default function ProfileScreen({ onLogout }) {
             onChangeText={(text) => setProfile({ ...profile, fullName: text })}
           />
 
+          <Text style={styles.label}>Age</Text>
           <TextInput
             style={styles.input}
             placeholder="Age"
             value={profile.age}
-            onChangeText={(text) => setProfile({ ...profile, age: text })}
+            onChangeText={(text) =>
+              setProfile({ ...profile, age: text.replace(/[^0-9]/g, "") })
+            }
             keyboardType="numeric"
           />
 
@@ -185,9 +213,32 @@ export default function ProfileScreen({ onLogout }) {
               ))}
             </View>
           </View>
+          {/* ADDED: Allergies Input */}
+          <Text style={styles.label}>Allergies (comma-separated)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., Peanuts, Shellfish, Dairy"
+            value={profile.allergiesInput}
+            onChangeText={(text) =>
+              setProfile({ ...profile, allergiesInput: text })
+            }
+            autoCapitalize="words"
+          />
+
+          {/* ADDED: Health Conditions Input */}
+          <Text style={styles.label}>Health Conditions (comma-separated)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., Diabetes, High Cholesterol"
+            value={profile.healthConditionsInput}
+            onChangeText={(text) =>
+              setProfile({ ...profile, healthConditionsInput: text })
+            }
+            autoCapitalize="words"
+          />
 
           <TouchableOpacity
-            style={styles.saveButton}
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]} // Added disabled style
             onPress={handleSaveProfile}
             disabled={saving}
           >
@@ -324,18 +375,21 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: "#f3f4f6",
-    padding: 15,
-    borderRadius: 12,
+    paddingVertical: 12, // Adjust padding
+    paddingHorizontal: 15,
+    borderRadius: 8, // Adjust border radius
     fontSize: 16,
-    marginBottom: 12,
+    marginBottom: 16, // Increase spacing
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
   label: {
-    fontSize: 16,
+    // Add label style if it wasn't there before
+    fontSize: 14,
     fontWeight: "600",
     color: "#4b5563",
-    marginBottom: 8,
+    marginBottom: 6,
+    marginLeft: 4,
   },
   genderContainer: {
     marginBottom: 16,
@@ -373,7 +427,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 12, // Add some top margin
+  },
+  saveButtonDisabled: {
+    backgroundColor: "#9ca3af", // Style for when saving
   },
   saveButtonText: {
     color: "white",
