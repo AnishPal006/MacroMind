@@ -1,3 +1,5 @@
+// screens/AuthScreen.js
+
 import React, { useState } from "react";
 import {
   View,
@@ -8,33 +10,36 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
+  KeyboardAvoidingView, // Ensure this is imported
+  Platform, // Ensure this is imported
+  ScrollView, // Ensure this is imported
 } from "react-native";
 import apiService from "../services/api";
 
 export default function AuthScreen({ onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  // *** ENSURE STATE INCLUDES ALL FORM FIELDS ***
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     fullName: "",
     age: "",
-    gender: "other", // Default value
-    allergiesInput: "", // New field for comma-separated allergies
-    healthConditionsInput: "", // New field for comma-separated conditions (e.g., diabetes, high_cholesterol)
+    gender: "other",
+    allergiesInput: "", // <-- This property must exist
+    healthConditionsInput: "", // <-- This property must exist
   });
 
   const handleSubmit = async () => {
-    // Basic validation (keep existing checks)
-    if (
-      !formData.email ||
-      !formData.password ||
-      (!isLogin && !formData.fullName)
-    ) {
-      Alert.alert("Error", "Please fill in Email, Password, and Full Name");
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      Alert.alert("Error", "Please fill in all required fields");
+      return;
+    }
+
+    if (!isLogin && !formData.fullName) {
+      Alert.alert("Error", "Please enter your full name");
       return;
     }
 
@@ -52,7 +57,7 @@ export default function AuthScreen({ onAuthSuccess }) {
         const healthConditions = formData.healthConditionsInput
           .split(",")
           .map((s) => s.trim().toLowerCase())
-          .filter(Boolean); // Store conditions in lowercase
+          .filter(Boolean);
 
         response = await apiService.register({
           email: formData.email,
@@ -69,11 +74,10 @@ export default function AuthScreen({ onAuthSuccess }) {
         Alert.alert("Success", response.message);
         onAuthSuccess?.(response.data.user);
       } else {
-        // Handle specific backend errors if needed
         throw new Error(response.message || "Authentication failed");
       }
     } catch (error) {
-      console.error("Auth Error:", error); // Log the full error
+      console.error("Auth Error:", error);
       Alert.alert("Error", error.message || "Authentication failed");
     } finally {
       setLoading(false);
@@ -98,37 +102,39 @@ export default function AuthScreen({ onAuthSuccess }) {
             {!isLogin && (
               <TextInput
                 style={styles.input}
-                placeholder="Full Name *"
+                placeholder="Full Name *" // Placeholder text
                 value={formData.fullName}
                 onChangeText={(text) =>
                   setFormData({ ...formData, fullName: text })
                 }
                 autoCapitalize="words"
+                placeholderTextColor="#9ca3af" // Add placeholder text color
               />
             )}
 
             <TextInput
               style={styles.input}
-              placeholder="Email *"
+              placeholder="Email *" // Placeholder text
               value={formData.email}
               onChangeText={(text) => setFormData({ ...formData, email: text })}
               keyboardType="email-address"
               autoCapitalize="none"
+              placeholderTextColor="#9ca3af" // Add placeholder text color
             />
 
             <TextInput
               style={styles.input}
-              placeholder="Password *"
+              placeholder="Password *" // Placeholder text
               value={formData.password}
               onChangeText={(text) =>
                 setFormData({ ...formData, password: text })
               }
               secureTextEntry
+              placeholderTextColor="#9ca3af" // Add placeholder text color
             />
 
             {!isLogin && (
               <>
-                {/* Keep Age and Gender inputs */}
                 <TextInput
                   style={styles.input}
                   placeholder="Age (optional)"
@@ -138,25 +144,49 @@ export default function AuthScreen({ onAuthSuccess }) {
                       ...formData,
                       age: text.replace(/[^0-9]/g, ""),
                     })
-                  } // Only allow numbers
+                  }
                   keyboardType="numeric"
+                  placeholderTextColor="#9ca3af" // Add placeholder text color
                 />
+
                 <View style={styles.genderContainer}>
-                  {/* ... Gender Buttons ... */}
+                  <Text style={styles.label}>Gender:</Text>
+                  <View style={styles.genderButtons}>
+                    {["male", "female", "other"].map((gender) => (
+                      <TouchableOpacity
+                        key={gender}
+                        style={[
+                          styles.genderButton,
+                          formData.gender === gender &&
+                            styles.genderButtonActive,
+                        ]}
+                        onPress={() => setFormData({ ...formData, gender })}
+                      >
+                        <Text
+                          style={[
+                            styles.genderButtonText,
+                            formData.gender === gender &&
+                              styles.genderButtonTextActive,
+                          ]}
+                        >
+                          {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
 
                 {/* New Health Fields */}
-                <Text style={styles.label}>
-                  Allergies (comma-separated, e.g., peanuts, dairy)
-                </Text>
+                <Text style={styles.label}>Allergies (comma-separated)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="e.g., Peanuts, Shellfish"
-                  value={formData.allergiesInput}
+                  value={formData.allergiesInput} // This now correctly binds to state
                   onChangeText={(text) =>
                     setFormData({ ...formData, allergiesInput: text })
                   }
                   autoCapitalize="words"
+                  placeholderTextColor="#9ca3af" // Add placeholder text color
                 />
 
                 <Text style={styles.label}>
@@ -165,18 +195,19 @@ export default function AuthScreen({ onAuthSuccess }) {
                 <TextInput
                   style={styles.input}
                   placeholder="e.g., Diabetes, High Cholesterol"
-                  value={formData.healthConditionsInput}
+                  value={formData.healthConditionsInput} // This now correctly binds to state
                   onChangeText={(text) =>
                     setFormData({ ...formData, healthConditionsInput: text })
                   }
-                  autoCapitalize="words" // Capitalize words, but we'll lowercase conditions later
+                  autoCapitalize="words"
+                  placeholderTextColor="#9ca3af" // Add placeholder text color
                 />
               </>
             )}
 
             <TouchableOpacity
               style={[
-                styles.submitButton, // Style for the blue button
+                styles.submitButton,
                 loading && styles.submitButtonDisabled,
               ]}
               onPress={handleSubmit}
@@ -185,7 +216,6 @@ export default function AuthScreen({ onAuthSuccess }) {
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                // THIS PART SHOULD BE RENDERING THE TEXT
                 <Text style={styles.submitButtonText}>
                   {isLogin ? "Login" : "Sign Up"}
                 </Text>
@@ -198,7 +228,7 @@ export default function AuthScreen({ onAuthSuccess }) {
             >
               <Text style={styles.switchButtonText}>
                 {isLogin
-                  ? "Don't have an account? Sign Up" // This text should appear in login mode
+                  ? "Don't have an account? Sign Up"
                   : "Already have an account? Login"}
               </Text>
             </TouchableOpacity>
@@ -209,6 +239,7 @@ export default function AuthScreen({ onAuthSuccess }) {
   );
 }
 
+// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -247,13 +278,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: "#e5e7eb",
+    color: "#111827", // Ensure input text is visible
   },
   label: {
-    fontSize: 14, // Slightly smaller label
+    fontSize: 14,
     fontWeight: "600",
     color: "#4b5563",
     marginBottom: 6,
-    marginLeft: 4, // Align with input padding
+    marginLeft: 4,
   },
   genderContainer: {
     marginBottom: 15,
@@ -295,16 +327,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#9ca3af",
   },
   submitButtonText: {
-    color: "white", // Text color is white
+    color: "white",
     fontSize: 18,
     fontWeight: "bold",
   },
   switchButton: {
-    marginTop: 20, // Should have space above it
+    marginTop: 20,
     alignItems: "center",
   },
   switchButtonText: {
-    color: "#007AFF", // Text color is blue
+    color: "#007AFF",
     fontSize: 16,
   },
 });
