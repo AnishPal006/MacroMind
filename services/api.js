@@ -154,6 +154,13 @@ class ApiService {
     return this.request(`/logs/scans${query}`);
   }
 
+  async logWaterIntake(amountMl) {
+    return this.request("/logs/water", {
+      method: "POST",
+      body: JSON.stringify({ amountMl: amountMl }),
+    });
+  }
+
   // User endpoints
   async getProfile() {
     return this.request("/user/profile");

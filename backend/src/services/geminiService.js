@@ -76,6 +76,7 @@ exports.getFoodNutritionFromImage = async (imageBuffer, mimeType) => {
 exports.getFoodNutritionFromText = async (foodName) => {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    //const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `Provide detailed nutritional information for "${foodName}". 
     Return ONLY a JSON object with this exact structure (no markdown, no extra text):
@@ -254,7 +255,8 @@ exports.getMealSuggestions = async (userId) => {
     const ingredientList = uniqueItemNames.join(", ");
 
     // 3. Call Gemini API
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // Or gemini-1.5-flash
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // Or "gemini-pro"
+    //const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `Based ONLY on these available ingredients: ${ingredientList}
 
@@ -344,7 +346,7 @@ exports.getHealthAdvice = async (food, user) => {
   try {
     // Use a model suitable for text analysis (e.g., gemini-1.5-flash or gemini-pro)
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // Or "gemini-pro"
-
+    // const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     // Construct the prompt
     const prompt = `
         Analyze the suitability of the following food for a specific user.

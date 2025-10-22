@@ -10,6 +10,7 @@ import {
   TouchableOpacity, // Keep if needed, maybe for future buttons
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import apiService from "../services/api";
 
@@ -17,6 +18,7 @@ export default function DashboardScreen({ currentUser }) {
   const [dailySummary, setDailySummary] = useState(null);
   const [loading, setLoading] = useState(true); // Still useful for initial load
   const [refreshing, setRefreshing] = useState(false);
+  const [loggingWater, setLoggingWater] = useState(false); // State for water logging action
 
   // Use useCallback to memoize loadDailySummary
   const loadDailySummary = useCallback(async (isRefreshing = false) => {
@@ -75,6 +77,33 @@ export default function DashboardScreen({ currentUser }) {
         </Text>
       </View>
     );
+  };
+
+  const handleLogWater = async (amount) => {
+    if (loggingWater) return; // Prevent double taps
+    setLoggingWater(true);
+    try {
+      const response = await apiService.logWaterIntake(amount);
+      if (response.success && response.data) {
+        // OPTION 1: Optimistic update (faster UI response)
+        setDailySummary((prevSummary) => ({
+          ...prevSummary,
+          totals: {
+            ...prevSummary?.totals,
+            water: response.data.waterIntakeMl, // Use the total from the response
+          },
+        }));
+        // OPTION 2: Re-fetch the whole summary (ensures consistency if other things changed)
+        // await loadDailySummary();
+      } else {
+        Alert.alert("Error", response.message || "Could not log water.");
+      }
+    } catch (error) {
+      console.error("Log water error:", error);
+      Alert.alert("Error", error.message || "Failed to log water intake.");
+    } finally {
+      setLoggingWater(false);
+    }
   };
 
   // --- Initial Loading State ---
@@ -204,6 +233,57 @@ export default function DashboardScreen({ currentUser }) {
           </View>
         </View>
 
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Hydration</Text>
+          <View style={styles.waterCard}>
+            <View style={styles.waterInfo}>
+              <Text style={styles.waterLabel}>Today's Intake</Text>
+              <Text style={styles.waterValue}>
+                {Math.round(totals.water)} ml
+              </Text>
+              <Text style={styles.waterGoal}>
+                Goal: {Math.round(goals.water)} ml
+              </Text>
+              {/* Water Progress Bar - Reuse existing component */}
+              {renderProgressBar(totals.water, goals.water, "#3b82f6")}
+              {/* Blue color */}
+            </View>
+            <View style={styles.waterButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.waterButton,
+                  loggingWater && styles.waterButtonDisabled,
+                ]}
+                onPress={() => handleLogWater(250)}
+                disabled={loggingWater}
+              >
+                <Text style={styles.waterButtonText}>+250ml</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.waterButton,
+                  loggingWater && styles.waterButtonDisabled,
+                ]}
+                onPress={() => handleLogWater(500)}
+                disabled={loggingWater}
+              >
+                <Text style={styles.waterButtonText}>+500ml</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.waterButton,
+                  loggingWater && styles.waterButtonDisabled,
+                ]}
+                onPress={() => handleLogWater(750)} // Example: Add 750ml option
+                disabled={loggingWater}
+              >
+                <Text style={styles.waterButtonText}>+750ml</Text>
+              </TouchableOpacity>
+              {/* Add more buttons as needed */}
+            </View>
+          </View>
+        </View>
+
         {/* Quick Stats */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>Additional Stats</Text>
@@ -211,14 +291,10 @@ export default function DashboardScreen({ currentUser }) {
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Fiber</Text>
               <Text style={styles.statValue}>{totals.fiber.toFixed(1)}g</Text>
+              {/* Optional: Add fiber goal display */}
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Water</Text>
-              <Text style={styles.statValue}>{Math.round(totals.water)}ml</Text>
-              <Text style={styles.macroGoal}>
-                Goal: {Math.round(goals.water)}ml
-              </Text>
-            </View>
+            {/* Removed Water from here */}
+            {/* <View style={styles.statItem}> ... </View> */}
           </View>
         </View>
 
@@ -368,6 +444,58 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#007AFF",
   },
+  waterCard: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1.5,
+  },
+  waterInfo: {
+    marginBottom: 15,
+  },
+  waterLabel: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  waterValue: {
+    fontSize: 26,
+    fontWeight: "bold",
+    color: "#1f2937",
+    marginBottom: 2,
+  },
+  waterGoal: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginBottom: 10,
+  },
+  waterButtons: {
+    flexDirection: "row",
+    justifyContent: "space-around", // Distribute buttons evenly
+    marginTop: 10,
+  },
+  waterButton: {
+    backgroundColor: "#e0f2fe", // Light blue background
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 20, // Rounded pill shape
+    borderWidth: 1,
+    borderColor: "#7dd3fc", // Lighter blue border
+  },
+  waterButtonDisabled: {
+    backgroundColor: "#e5e7eb", // Gray out when disabled
+    borderColor: "#d1d5db",
+  },
+  waterButtonText: {
+    color: "#0c546b", // Dark blue text
+    fontWeight: "600",
+    fontSize: 14,
+  },
+
   statsSection: {
     marginBottom: 24,
   },
