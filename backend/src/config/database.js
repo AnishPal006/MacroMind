@@ -14,6 +14,12 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
     underscored: false,
     freezeTableName: true,
   },
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false, // This is often necessary for free tier cloud databases
+    },
+  },
 });
 
 // Test connection
