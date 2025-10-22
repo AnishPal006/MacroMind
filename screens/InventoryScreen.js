@@ -5,7 +5,7 @@ import {
   Text,
   StyleSheet,
   SafeAreaView,
-  FlatList, // Use FlatList for better performance with potentially long lists
+  FlatList,
   TouchableOpacity,
   TextInput,
   ScrollView,
@@ -13,16 +13,17 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
-  Platform, // For KeyboardAvoidingView
-  KeyboardAvoidingView, // To handle keyboard overlap in modal
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import apiService from "../services/api";
+// Import AsyncStorage
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Helper to format dates consistently (optional, but nice)
+// Helper to format dates
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
   try {
-    // Add time component to ensure local date interpretation
     return new Date(dateString + "T00:00:00").toLocaleDateString();
   } catch (e) {
     return "Invalid Date";
@@ -34,19 +35,19 @@ export default function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // Track if adding or editing
-  const [currentItem, setCurrentItem] = useState(null); // Item being edited
-  const [suggestions, setSuggestions] = useState([]); // <-- New state for suggestions
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false); // <-- Loading state for suggestions
-  const [suggestionsModalVisible, setSuggestionsModalVisible] = useState(false); // <-- State for suggestions modal
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentItem, setCurrentItem] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsModalVisible, setSuggestionsModalVisible] = useState(false);
   const [formData, setFormData] = useState({
     itemName: "",
     quantity: "",
-    unit: "pieces", // Default unit
-    expiryDate: "", // Store as YYYY-MM-DD string if using date picker, otherwise plain string
+    unit: "pieces",
+    expiryDate: "",
   });
 
-  // Fetch inventory data
+  // --- (loadInventory, useEffect, onRefresh, closeModal, handleAddItem, handleEditItem, handleSaveItem, handleDeleteItem, renderItem, renderEmptyList all remain the same) ---
   const loadInventory = useCallback(async (isRefreshing = false) => {
     if (!isRefreshing) setLoading(true);
     try {
@@ -67,18 +68,15 @@ export default function InventoryScreen() {
     }
   }, []);
 
-  // Load inventory when component mounts
   useEffect(() => {
     loadInventory();
   }, [loadInventory]);
 
-  // Handle pull-to-refresh
   const onRefresh = () => {
     setRefreshing(true);
     loadInventory(true);
   };
 
-  // Reset form and close modal
   const closeModal = () => {
     setModalVisible(false);
     setIsEditing(false);
@@ -86,7 +84,6 @@ export default function InventoryScreen() {
     setFormData({ itemName: "", quantity: "", unit: "pieces", expiryDate: "" });
   };
 
-  // Open modal for adding a new item
   const handleAddItem = () => {
     setIsEditing(false);
     setCurrentItem(null);
@@ -94,7 +91,6 @@ export default function InventoryScreen() {
     setModalVisible(true);
   };
 
-  // Open modal for editing an existing item
   const handleEditItem = (item) => {
     setIsEditing(true);
     setCurrentItem(item);
@@ -102,59 +98,49 @@ export default function InventoryScreen() {
       itemName: item.itemName || "",
       quantity: item.quantity?.toString() || "",
       unit: item.unit || "pieces",
-      expiryDate: item.expiryDate || "", // Assumes stored as YYYY-MM-DD
+      expiryDate: item.expiryDate || "",
     });
     setModalVisible(true);
   };
 
-  // Handle saving (add or update)
   const handleSaveItem = async () => {
     if (!formData.itemName || !formData.quantity) {
       Alert.alert("Error", "Item name and quantity are required.");
       return;
     }
-
     const dataToSend = {
       itemName: formData.itemName,
-      quantity: parseFloat(formData.quantity) || 0, // Ensure it's a number
+      quantity: parseFloat(formData.quantity) || 0,
       unit: formData.unit || "pieces",
-      // Send expiry date only if it's a valid-looking date string (YYYY-MM-DD)
       expiryDate: /^\d{4}-\d{2}-\d{2}$/.test(formData.expiryDate)
         ? formData.expiryDate
         : null,
-      // foodId: currentItem?.foodId || null, // Include if linking food items
     };
-
-    setLoading(true); // Indicate saving process
+    setLoading(true);
     try {
       let response;
       if (isEditing && currentItem) {
-        // Update existing item
         response = await apiService.updateInventoryItem(
           currentItem.id,
           dataToSend
         );
       } else {
-        // Add new item
         response = await apiService.addInventoryItem(dataToSend);
       }
-
       if (response.success) {
         closeModal();
-        loadInventory(); // Refresh list after saving
+        loadInventory();
       } else {
         Alert.alert("Error", response.message || "Failed to save item.");
-        setLoading(false); // Stop loading indicator on save failure
+        setLoading(false);
       }
     } catch (error) {
       console.error("Save inventory item error:", error);
       Alert.alert("Error", error.message || "Could not save item.");
-      setLoading(false); // Stop loading indicator on save error
+      setLoading(false);
     }
-    // setLoading(false) is handled in loadInventory's finally block upon success
   };
 
-  // Handle deleting an item
   const handleDeleteItem = (itemId) => {
     Alert.alert("Delete Item", "Are you sure you want to delete this item?", [
       { text: "Cancel", style: "cancel" },
@@ -162,30 +148,28 @@ export default function InventoryScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          setLoading(true); // Indicate deleting process
+          setLoading(true);
           try {
             const response = await apiService.deleteInventoryItem(itemId);
             if (response.success) {
-              loadInventory(); // Refresh list after deleting
+              loadInventory();
             } else {
               Alert.alert(
                 "Error",
                 response.message || "Failed to delete item."
               );
-              setLoading(false); // Stop loading on delete failure
+              setLoading(false);
             }
           } catch (error) {
             console.error("Delete inventory item error:", error);
             Alert.alert("Error", error.message || "Could not delete item.");
-            setLoading(false); // Stop loading on delete error
+            setLoading(false);
           }
-          // setLoading(false) handled in loadInventory's finally block
         },
       },
     ]);
   };
 
-  // Render individual inventory item
   const renderItem = ({ item }) => (
     <View style={styles.itemContainer}>
       <View style={styles.itemTextContainer}>
@@ -196,8 +180,6 @@ export default function InventoryScreen() {
         <Text style={styles.itemDetails}>
           Expiry: {formatDate(item.expiryDate)}
         </Text>
-        {/* Optionally display linked food name */}
-        {/* {item.foodItem && <Text style={styles.itemDetails}>Linked Food: {item.foodItem.name}</Text>} */}
       </View>
       <View style={styles.itemActions}>
         <TouchableOpacity
@@ -216,7 +198,6 @@ export default function InventoryScreen() {
     </View>
   );
 
-  // Render when list is empty
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyText}>🧺</Text>
@@ -225,23 +206,76 @@ export default function InventoryScreen() {
     </View>
   );
 
+  // *** MODIFIED fetchMealSuggestions function ***
   const fetchMealSuggestions = async () => {
     setSuggestionsLoading(true);
-    setSuggestions([]); // Clear previous suggestions
-    setSuggestionsModalVisible(true); // Show modal immediately with loading indicator
+    setSuggestions([]);
+    setSuggestionsModalVisible(true);
+
     try {
-      const response = await apiService.getMealSuggestions();
-      if (response.success && Array.isArray(response.data)) {
-        setSuggestions(response.data);
+      // 1. Get current inventory items from state
+      const currentItemNames = [
+        ...new Set(inventoryItems.map((item) => item.itemName)),
+      ]
+        .sort()
+        .join(",");
+
+      // 2. Get cached data
+      const cachedSuggestionsJSON = await AsyncStorage.getItem(
+        "cachedMealSuggestions"
+      );
+      const cachedInventoryString = await AsyncStorage.getItem(
+        "cachedInventoryString"
+      );
+      const cachedSuggestions = cachedSuggestionsJSON
+        ? JSON.parse(cachedSuggestionsJSON)
+        : null;
+
+      // 3. Compare current inventory with cached inventory string
+      if (cachedInventoryString === currentItemNames && cachedSuggestions) {
+        // 4. Use cache if inventories match
+        console.log("Using cached meal suggestions.");
+        setSuggestions(cachedSuggestions);
       } else {
-        // Handle specific error messages from Gemini if needed
-        setSuggestions([
-          {
-            mealName: "Info",
-            description: response.message || "Could not get suggestions.",
-            type: "Info",
-          },
-        ]);
+        // 5. Fetch new data if inventories differ or cache is empty
+        console.log("Fetching new meal suggestions from API.");
+        const response = await apiService.getMealSuggestions();
+
+        if (
+          response.success &&
+          Array.isArray(response.data) &&
+          response.data.length > 0
+        ) {
+          // Check if it's an error/info message from our service
+          if (
+            response.data[0]?.type === "Error" ||
+            response.data[0]?.type === "Info"
+          ) {
+            setSuggestions(response.data);
+          } else {
+            // 6. Save new data to cache
+            setSuggestions(response.data);
+            await AsyncStorage.setItem(
+              "cachedMealSuggestions",
+              JSON.stringify(response.data)
+            );
+            await AsyncStorage.setItem(
+              "cachedInventoryString",
+              currentItemNames
+            );
+          }
+        } else if (response.data?.length === 0) {
+          setSuggestions([]); // Handle empty array from API
+        } else {
+          // Handle API error
+          const errorMsg =
+            response.message ||
+            (response.data && response.data[0]?.description) ||
+            "Could not get suggestions.";
+          setSuggestions([
+            { mealName: "Info", description: errorMsg, type: "Info" },
+          ]);
+        }
       }
     } catch (error) {
       console.error("Fetch suggestions error:", error);
@@ -257,6 +291,7 @@ export default function InventoryScreen() {
       setSuggestionsLoading(false);
     }
   };
+  // *** END MODIFIED function ***
 
   // --- Main Render ---
   return (
@@ -269,14 +304,13 @@ export default function InventoryScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* --- ADDED: Suggest Meals Button --- */}
-      {/* Place this button somewhere convenient, e.g., below the header or above the list */}
+      {/* Suggest Meals Button */}
       <View style={styles.suggestionButtonContainer}>
         <TouchableOpacity
           style={[
-            styles.suggestionButton, // Add a new style for the button
+            styles.suggestionButton,
             (loading || refreshing || inventoryItems.length === 0) &&
-              styles.suggestionButtonDisabled, // Add disabled style
+              styles.suggestionButtonDisabled,
           ]}
           onPress={fetchMealSuggestions}
           disabled={loading || refreshing || inventoryItems.length === 0}
@@ -301,7 +335,7 @@ export default function InventoryScreen() {
         data={inventoryItems}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
-        ListEmptyComponent={!loading ? renderEmptyList : null} // Show empty state only when not loading
+        ListEmptyComponent={!loading ? renderEmptyList : null}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
@@ -350,7 +384,7 @@ export default function InventoryScreen() {
                       ...formData,
                       quantity: text.replace(/[^0-9.]/g, ""),
                     })
-                  } // Allow numbers and decimal
+                  }
                   keyboardType="numeric"
                 />
               </View>
@@ -370,12 +404,11 @@ export default function InventoryScreen() {
             <Text style={styles.label}>Expiry Date (Optional)</Text>
             <TextInput
               style={styles.input}
-              placeholder="YYYY-MM-DD" // Simple text input for now
+              placeholder="YYYY-MM-DD"
               value={formData.expiryDate}
               onChangeText={(text) =>
                 setFormData({ ...formData, expiryDate: text })
               }
-              // Consider using a Date Picker component here for better UX
             />
 
             <View style={styles.modalButtons}>
@@ -396,6 +429,7 @@ export default function InventoryScreen() {
         </KeyboardAvoidingView>
       </RNModal>
 
+      {/* Meal Suggestions Modal */}
       <RNModal
         animationType="slide"
         transparent={true}
@@ -437,7 +471,7 @@ export default function InventoryScreen() {
               </ScrollView>
             )}
             <TouchableOpacity
-              style={[styles.cancelButton, { marginTop: 15 }]} // <-- Revert back to using styles.cancelButton
+              style={[styles.cancelButton, { marginTop: 15 }]}
               onPress={() => setSuggestionsModalVisible(false)}
             >
               <Text style={styles.cancelButtonText}>Close</Text>
@@ -460,14 +494,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === "android" ? 25 : 20, // Adjust top padding for platform
+    paddingTop: Platform.OS === "android" ? 25 : 20,
     paddingBottom: 12,
     backgroundColor: "white",
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
   },
   title: {
-    fontSize: 24, // Smaller title
+    fontSize: 24,
     fontWeight: "bold",
     color: "#1f2937",
   },
@@ -482,7 +516,7 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: "white",
     fontSize: 24,
-    lineHeight: 30, // Adjust line height for vertical centering
+    lineHeight: 30,
     fontWeight: "bold",
   },
   loadingIndicator: {
@@ -491,16 +525,16 @@ const styles = StyleSheet.create({
   suggestionButtonContainer: {
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 15, // Add more bottom padding if needed
+    paddingBottom: 15,
     backgroundColor: "white",
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
   },
   suggestionButton: {
-    backgroundColor: "#FF6347", // Tomato Red (or your desired color)
+    backgroundColor: "#FF6347", // Tomato Red
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 25, // Make it rounded
+    borderRadius: 25,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
@@ -510,7 +544,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   suggestionButtonDisabled: {
-    backgroundColor: "#cccccc", // Gray when disabled
+    backgroundColor: "#cccccc",
     elevation: 0,
     shadowOpacity: 0,
   },
@@ -521,7 +555,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 80, // Ensure space below last item
+    paddingBottom: 80,
   },
   itemContainer: {
     backgroundColor: "white",
@@ -538,7 +572,7 @@ const styles = StyleSheet.create({
     elevation: 1.5,
   },
   itemTextContainer: {
-    flex: 1, // Take up available space
+    flex: 1,
     marginRight: 10,
   },
   itemName: {
@@ -559,7 +593,7 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingVertical: 4,
     paddingHorizontal: 8,
-    marginLeft: 8, // Space between buttons
+    marginLeft: 8,
   },
   editButtonText: {
     color: "#007AFF",
@@ -572,10 +606,10 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   emptyContainer: {
-    flex: 1, // Takes up space if list is short
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: "30%", // Push down from the top a bit
+    marginTop: "30%",
     paddingHorizontal: 40,
   },
   emptyText: {
@@ -594,7 +628,6 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textAlign: "center",
   },
-  // --- Modal Styles ---
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -608,7 +641,7 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 20,
     width: "100%",
-    maxWidth: 400, // Max width on larger screens
+    maxWidth: 400,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -616,14 +649,13 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   suggestionsModalContent: {
-    // Specific style for suggestions modal
     backgroundColor: "white",
     borderRadius: 15,
     padding: 24,
     paddingTop: 20,
     width: "100%",
-    maxWidth: 500, // Can be wider
-    maxHeight: "70%", // Limit height
+    maxWidth: 500,
+    maxHeight: "70%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -657,10 +689,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 12, // Add gap between columns
+    gap: 12,
   },
   column: {
-    flex: 1, // Each column takes half the space
+    flex: 1,
   },
   modalButtons: {
     flexDirection: "row",
@@ -668,7 +700,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   cancelButton: {
-    //flex: 1,
+    // flex: 1, // This was the problematic style
     padding: 14,
     borderRadius: 8,
     backgroundColor: "#e5e7eb",
