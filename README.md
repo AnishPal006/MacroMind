@@ -1,51 +1,52 @@
-# Welcome to your Expo app 👋
+# MacroMind: Nutrition Tracking App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+MacroMind simplifies nutrition tracking by enabling users to scan any food item—packed or unpacked—and instantly view its nutritional information tailored to their unique profiles.
 
-## Get started
+## Key Features
 
-1. Install dependencies
+- **Instant Scanning:** Scan any food item via image or text input to get nutritional details.
+- **Personalization:** Tailors information based on user profiles, including allergies and health conditions.
+- **Allergen/Health Alerts:** Provides warnings for potential allergens or foods unsuitable for specific health conditions.
+- **Inventory Management:** Track food items you have at home.
+- **Meal Suggestions:** Get meal ideas based on your current inventory using AI.
+- **Goal Tracking:** Monitor daily/weekly progress towards nutritional goals.
+- **(Planned)** Community Features: Share progress and motivate others.
+- **(Planned)** Freshness Tracking: Monitor food freshness to reduce waste.
 
-   ```bash
-   npm install
-   ```
+## Technology Stack
 
-2. Start the app
+- **Frontend:** Expo (React Native)
+- **Backend:** Node.js, Express.js
+- **Database:** PostgreSQL (with Sequelize ORM)
+- **AI:** Google Gemini API (Vision and Text analysis)
 
-   ```bash
-   npx expo start
-   ```
+## Setup and Running the Project
 
-In the output, you'll find options to open the app in a
+**Prerequisites:**
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- Node.js (LTS version recommended)
+- npm or yarn
+- Expo Go app (for mobile testing) or Android/iOS simulators
+- PostgreSQL database instance
+- Google Gemini API Key
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+**Installation:**
 
-## Get a fresh project
+1.  Clone the repository: `git clone <your-repo-url>`
+2.  Navigate to the project directory: `cd <repository-folder-name>`
+3.  Install root and backend dependencies: `npm run install:all`
 
-When you're ready, run:
+**Configuration:**
 
-```bash
-npm run reset-project
-```
+1.  Create a `.env` file in the **root** directory (for the Expo app). See `.env.example` for required variables (like `EXPO_PUBLIC_API_URL`).
+2.  Create a `.env` file in the **`backend/`** directory. See `backend/.env.example` for required variables (like `DATABASE_URL`, `JWT_SECRET`, and `GEMINI_API_KEY`).
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Running the Application:**
 
-## Learn more
+1.  **Start the Backend:** Open a terminal, navigate to the `backend` folder (`cd backend`), and run: `npm run dev`
+2.  **Start the Frontend:** Open another terminal in the **root** project directory and run: `npx expo start`
+3.  Follow the instructions in the Expo terminal to open the app on your device/simulator.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Screenshots
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# MacroMinds-final
+_(Add screenshots or GIFs of your app here)_
