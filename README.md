@@ -49,20 +49,44 @@ MacroMind simplifies nutrition tracking by enabling users to scan any food itemâ
 
 ## Screenshots
 
-**Login:**
-![Login and SignUp Page](assets/screenshots/Login.jpeg) (assets/screenshots/SignUp.jpeg)
+**Login & Sign Up:**
+<br />
+<img src="assets/screenshots/Login.jpeg" alt="Login Page" width="300" />
+<img src="assets/screenshots/SignUp.jpeg" alt="Sign Up Page" width="300" />
+
+---
 
 **Profile:**
-![Profile Page](assets/screenshots/Profile-1.jpeg) (assets/screenshots/Profile-2.jpeg)
+<br />
+<img src="assets/screenshots/Profile-1.jpeg" alt="Profile Page Part 1" width="300" />
+<img src="assets/screenshots/Profile-2.jpeg" alt="Profile Page Part 2" width="300" />
+
+---
 
 **Dashboard:**
-![Dashboard Page](assets/screenshots/Dashboard-1.jpeg) (assets/screenshots/Dashboard-2.jpeg)
+<br />
+<img src="assets/screenshots/Dashboard-1.jpeg" alt="Dashboard Page Part 1" width="300" />
+<img src="assets/screenshots/Dashboard-2.jpeg" alt="Dashboard Page Part 2" width="300" />
 
-**Scanner:**
-![Scanning Page](assets/screenshots/Scan-1.jpeg) (assets/screenshots/Scan-2.jpeg) (assets/screenshots/Scan-3.jpeg) (assets/screenshots/Scan-4.jpeg)
+---
+
+**Scanner & Results:**
+<br />
+<img src="assets/screenshots/Scan-1.jpeg" alt="Scanner Camera View" width="300" />
+<img src="assets/screenshots/Scan-2.jpeg" alt="Scan Details Modal" width="300" />
+<img src="assets/screenshots/Scan-3.jpeg" alt="Scan Results Display Part 1" width="300" />
+<img src="assets/screenshots/Scan-4.jpeg" alt="Scan Results Display Part 2" width="300" />
+
+---
 
 **History:**
-![History Page](assets/screenshots/History-1.jpeg) (assets/screenshots/History-2.jpeg)
+<br />
+<img src="assets/screenshots/History-1.jpeg" alt="History Page Listing Scans" width="300" />
+<img src="assets/screenshots/History-2.jpeg" alt="History Scan Details View" width="300" />
 
-**Inventory:**
-![Inventory and Meal Suggestion Page](assets/screenshots/Inventory-1.jpeg) (assets/screenshots/Inventory-2.jpeg)
+---
+
+**Inventory & Suggestions:**
+<br />
+<img src="assets/screenshots/Inventory-1.jpeg" alt="Inventory Listing Page" width="300" />
+<img src="assets/screenshots/Inventory-2.jpeg" alt="Meal Suggestions Modal" width="300" />
