@@ -49,4 +49,20 @@ MacroMind simplifies nutrition tracking by enabling users to scan any food itemâ
 
 ## Screenshots
 
-_(Add screenshots or GIFs of your app here)_
+**Login:**
+![Login and SignUp Page](assets/screenshots/Login.jpeg) (assets/screenshots/SignUp.jpeg)
+
+**Profile:**
+![Profile Page](assets/screenshots/Profile-1.jpeg) (assets/screenshots/Profile-2.jpeg)
+
+**Dashboard:**
+![Dashboard Page](assets/screenshots/Dashboard-1.jpeg) (assets/screenshots/Dashboard-2.jpeg)
+
+**Scanner:**
+![Scanning Page](assets/screenshots/Scan-1.jpeg) (assets/screenshots/Scan-2.jpeg) (assets/screenshots/Scan-3.jpeg) (assets/screenshots/Scan-4.jpeg)
+
+**History:**
+![History Page](assets/screenshots/History-1.jpeg) (assets/screenshots/History-2.jpeg)
+
+**Inventory:**
+![Inventory and Meal Suggestion Page](assets/screenshots/Inventory-1.jpeg) (assets/screenshots/Inventory-2.jpeg)
