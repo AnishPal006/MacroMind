@@ -104,7 +104,7 @@ exports.scanFoodFromImage = async (req, res) => {
     // Get nutrition data from Gemini Vision
     const nutritionData = await geminiService.getFoodNutritionFromImage(
       imageBuffer,
-      mimeType
+      mimeType,
     );
 
     if (
@@ -145,7 +145,7 @@ exports.scanFoodFromImage = async (req, res) => {
     // Detect allergens
     const allergenDetection = await geminiService.detectAllergens(
       food.id,
-      user.allergies
+      user.allergies,
     );
 
     // Get health advice
@@ -170,7 +170,7 @@ exports.scanFoodFromImage = async (req, res) => {
     // Calculate nutrition for this quantity
     const nutrition = geminiService.calculateNutritionForQuantity(
       food,
-      scan.quantityGrams // Use the actual saved quantity
+      scan.quantityGrams, // Use the actual saved quantity
     );
 
     // *** No need to manually delete finalImagePath here unless scan creation fails ***
@@ -229,9 +229,8 @@ exports.scanFoodByText = async (req, res) => {
     }
 
     // Get nutrition info from Gemini
-    const nutritionData = await geminiService.getFoodNutritionFromText(
-      foodName
-    );
+    const nutritionData =
+      await geminiService.getFoodNutritionFromText(foodName);
 
     if (
       !nutritionData ||
@@ -252,7 +251,7 @@ exports.scanFoodByText = async (req, res) => {
     // Detect allergens
     const allergenDetection = await geminiService.detectAllergens(
       food.id,
-      user.allergies
+      user.allergies,
     );
 
     // Get health advice
@@ -277,7 +276,7 @@ exports.scanFoodByText = async (req, res) => {
     // Calculate nutrition for this quantity
     const nutrition = geminiService.calculateNutritionForQuantity(
       food,
-      quantityGrams
+      quantityGrams,
     );
 
     res.status(201).json({
@@ -375,7 +374,7 @@ exports.manualFoodEntry = async (req, res) => {
 
     const nutrition = geminiService.calculateNutritionForQuantity(
       food,
-      quantityGrams
+      quantityGrams,
     );
 
     res.status(201).json({
@@ -396,5 +395,210 @@ exports.manualFoodEntry = async (req, res) => {
       message: "Failed to create food entry",
       error: err.message,
     });
+  }
+};
+exports.scanBarcode = async (req, res) => {
+  try {
+    const { barcode, mealType, quantityGrams } = req.body;
+    console.log(`\n--- INITIATING BARCODE SCAN: ${barcode} ---`);
+
+    const Food = require("../models/Food");
+    const FoodScan = require("../models/FoodScan");
+    const User = require("../models/User"); // Required for fetching profile
+
+    // ==========================================
+    // TIER 1: Check Local Database
+    // ==========================================
+    let food = await Food.findOne({ where: { barcode: barcode } });
+    if (food) console.log("SUCCESS (Tier 1): Found in local database.");
+
+    // ==========================================
+    // TIER 2: Open Food Facts
+    // ==========================================
+    if (!food) {
+      console.log("Not local. Checking Tier 2: Open Food Facts...");
+      const offResponse = await fetch(
+        `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
+      );
+      const offData = await offResponse.json();
+
+      if (offData.status === 1) {
+        const product = offData.product;
+        const nutriments = product.nutriments || {};
+
+        food = await Food.create({
+          name: product.product_name || "Unknown Packaged Food",
+          caloriesPer100g: nutriments["energy-kcal_100g"] || 0,
+          proteinGrams: nutriments.proteins_100g || 0,
+          carbsGrams: nutriments.carbohydrates_100g || 0,
+          fatsGrams: nutriments.fat_100g || 0,
+          fiberGrams: nutriments.fiber_100g || 0,
+          sugarGrams: nutriments.sugars_100g || 0,
+          sodiumMg: (nutriments.sodium_100g || 0) * 1000,
+          allergens: product.allergens_tags
+            ? product.allergens_tags.map((a) => a.replace("en:", ""))
+            : [],
+          category: "other",
+          barcode: barcode,
+          imageUrl: product.image_url || null,
+          source: "manual",
+        });
+        console.log("SUCCESS (Tier 2): Found in Open Food Facts.");
+      }
+    }
+
+    // ==========================================
+    // TIER 3: UPCitemdb + AI Bridge
+    // ==========================================
+    if (!food) {
+      console.log("Not in OFF. Checking Tier 3: UPCitemdb + AI Bridge...");
+      const upcResponse = await fetch(
+        `https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`,
+      );
+      const upcData = await upcResponse.json();
+
+      if (upcData.items && upcData.items.length > 0) {
+        const productName = upcData.items[0].title;
+        console.log(`UPC Match: "${productName}". Asking AI for macros...`);
+
+        try {
+          const { GoogleGenerativeAI } = require("@google/generative-ai");
+          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+          // NEW: Force strict JSON format to prevent parsing crashes
+          const model = genAI.getGenerativeModel({
+            model: "gemini-1.5-flash",
+            generationConfig: { responseMimeType: "application/json" },
+          });
+
+          const prompt = `Estimate the average nutritional values per 100 grams for "${productName}". 
+          Format strictly as: {"caloriesPer100g": number, "proteinGrams": number, "carbsGrams": number, "fatsGrams": number, "sugarGrams": number, "fiberGrams": number, "sodiumMg": number}`;
+
+          const aiResult = await model.generateContent(prompt);
+          const estimatedMacros = JSON.parse(aiResult.response.text());
+
+          food = await Food.create({
+            name: productName,
+            caloriesPer100g: estimatedMacros.caloriesPer100g || 0,
+            proteinGrams: estimatedMacros.proteinGrams || 0,
+            carbsGrams: estimatedMacros.carbsGrams || 0,
+            fatsGrams: estimatedMacros.fatsGrams || 0,
+            fiberGrams: estimatedMacros.fiberGrams || 0,
+            sugarGrams: estimatedMacros.sugarGrams || 0,
+            sodiumMg: estimatedMacros.sodiumMg || 0,
+            allergens: [],
+            category: "other",
+            barcode: barcode,
+            imageUrl: upcData.items[0].images?.[0] || null,
+            source: "gemini",
+          });
+          console.log("SUCCESS (Tier 3): AI estimated macros.");
+        } catch (aiError) {
+          console.error("AI Bridge failed.", aiError);
+          food = await Food.create({
+            name: productName,
+            category: "other",
+            barcode: barcode,
+            caloriesPer100g: 0,
+            proteinGrams: 0,
+            carbsGrams: 0,
+            fatsGrams: 0,
+            source: "manual",
+          });
+        }
+      }
+    }
+
+    // ==========================================
+    // TIER 4: Ultimate Failure
+    // ==========================================
+    if (!food) {
+      console.log("FAILURE: Barcode not found.");
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "Barcode not found. Try snapping a photo of the nutrition label using AI Vision!",
+        });
+    }
+
+    // ==========================================
+    // TIER 5: AI Health Evaluation (Personalized)
+    // ==========================================
+    let healthSuitability = "neutral";
+    let healthReason = "Verified packaged food.";
+
+    try {
+      console.log("Evaluating personalized health suitability...");
+      const currentUser = await User.findByPk(req.user.id);
+
+      if (currentUser) {
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        // NEW: Force strict JSON format here too!
+        const model = genAI.getGenerativeModel({
+          model: "gemini-1.5-flash",
+          generationConfig: { responseMimeType: "application/json" },
+        });
+
+        const userProfile = `Allergies: ${(currentUser.allergies || []).join(", ") || "None"}. Health Conditions: ${(currentUser.healthConditions || []).join(", ") || "None"}. Dietary Preferences: ${(currentUser.dietaryPreferences || []).join(", ") || "None"}`;
+
+        const prompt = `You are a nutritionist. Evaluate if "${food.name}" (a packaged food with ${food.caloriesPer100g}kcal, ${food.sugarGrams}g sugar, ${food.sodiumMg}mg sodium per 100g) is suitable for a user with the following profile: ${userProfile}. 
+        Format exactly like this: {"suitability": "good" | "neutral" | "warning", "reason": "One short sentence explaining why."}`;
+
+        const aiResult = await model.generateContent(prompt);
+        const healthData = JSON.parse(aiResult.response.text());
+
+        healthSuitability = healthData.suitability || "neutral";
+        healthReason = healthData.reason || "Analysis complete.";
+        console.log(
+          "SUCCESS (Tier 5): AI Health Insight generated ->",
+          healthReason,
+        );
+      }
+    } catch (error) {
+      console.error("Health evaluation AI failed:", error.message);
+    }
+
+    // Save to history
+    const scan = await FoodScan.create({
+      userId: req.user.id,
+      foodId: food.id,
+      mealType,
+      quantityGrams,
+      healthSuitability: healthSuitability,
+      healthReason: healthReason,
+      imageUrl: food.imageUrl,
+    });
+
+    // Return ALL macros to frontend
+    res.json({
+      success: true,
+      data: {
+        scan: {
+          ...scan.toJSON(),
+          food: food.toJSON(),
+          nutrition: {
+            calories: Math.round(
+              (food.caloriesPer100g || 0) * (quantityGrams / 100),
+            ),
+            protein: ((food.proteinGrams || 0) * (quantityGrams / 100)).toFixed(
+              1,
+            ),
+            carbs: ((food.carbsGrams || 0) * (quantityGrams / 100)).toFixed(1),
+            fats: ((food.fatsGrams || 0) * (quantityGrams / 100)).toFixed(1),
+            fiber: ((food.fiberGrams || 0) * (quantityGrams / 100)).toFixed(1),
+            sugar: ((food.sugarGrams || 0) * (quantityGrams / 100)).toFixed(1),
+            sodium: ((food.sodiumMg || 0) * (quantityGrams / 100)).toFixed(1),
+          },
+          imageUrl: food.imageUrl,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Barcode Error:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error processing barcode." });
   }
 };

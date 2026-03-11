@@ -1,10 +1,8 @@
-// screens/InventoryScreen.js
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   FlatList,
   TouchableOpacity,
   TextInput,
@@ -16,11 +14,11 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons"; // <-- Added Vector Icons
 import apiService from "../services/api";
-// Import AsyncStorage
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Helper to format dates
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
   try {
@@ -47,7 +45,6 @@ export default function InventoryScreen() {
     expiryDate: "",
   });
 
-  // --- (loadInventory, useEffect, onRefresh, closeModal, handleAddItem, handleEditItem, handleSaveItem, handleDeleteItem, renderItem, renderEmptyList all remain the same) ---
   const loadInventory = useCallback(async (isRefreshing = false) => {
     if (!isRefreshing) setLoading(true);
     try {
@@ -122,7 +119,7 @@ export default function InventoryScreen() {
       if (isEditing && currentItem) {
         response = await apiService.updateInventoryItem(
           currentItem.id,
-          dataToSend
+          dataToSend,
         );
       } else {
         response = await apiService.addInventoryItem(dataToSend);
@@ -156,7 +153,7 @@ export default function InventoryScreen() {
             } else {
               Alert.alert(
                 "Error",
-                response.message || "Failed to delete item."
+                response.message || "Failed to delete item.",
               );
               setLoading(false);
             }
@@ -170,75 +167,31 @@ export default function InventoryScreen() {
     ]);
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.itemContainer}>
-      <View style={styles.itemTextContainer}>
-        <Text style={styles.itemName}>{item.itemName}</Text>
-        <Text style={styles.itemDetails}>
-          Quantity: {item.quantity} {item.unit || ""}
-        </Text>
-        <Text style={styles.itemDetails}>
-          Expiry: {formatDate(item.expiryDate)}
-        </Text>
-      </View>
-      <View style={styles.itemActions}>
-        <TouchableOpacity
-          onPress={() => handleEditItem(item)}
-          style={styles.actionButton}
-        >
-          <Text style={styles.editButtonText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => handleDeleteItem(item.id)}
-          style={styles.actionButton}
-        >
-          <Text style={styles.deleteButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderEmptyList = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyText}>🧺</Text>
-      <Text style={styles.emptyTitle}>Your inventory is empty.</Text>
-      <Text style={styles.emptySubtitle}>Tap '+' to add your first item!</Text>
-    </View>
-  );
-
-  // *** MODIFIED fetchMealSuggestions function ***
   const fetchMealSuggestions = async () => {
     setSuggestionsLoading(true);
     setSuggestions([]);
     setSuggestionsModalVisible(true);
 
     try {
-      // 1. Get current inventory items from state
       const currentItemNames = [
         ...new Set(inventoryItems.map((item) => item.itemName)),
       ]
         .sort()
         .join(",");
 
-      // 2. Get cached data
       const cachedSuggestionsJSON = await AsyncStorage.getItem(
-        "cachedMealSuggestions"
+        "cachedMealSuggestions",
       );
       const cachedInventoryString = await AsyncStorage.getItem(
-        "cachedInventoryString"
+        "cachedInventoryString",
       );
       const cachedSuggestions = cachedSuggestionsJSON
         ? JSON.parse(cachedSuggestionsJSON)
         : null;
 
-      // 3. Compare current inventory with cached inventory string
       if (cachedInventoryString === currentItemNames && cachedSuggestions) {
-        // 4. Use cache if inventories match
-        console.log("Using cached meal suggestions.");
         setSuggestions(cachedSuggestions);
       } else {
-        // 5. Fetch new data if inventories differ or cache is empty
-        console.log("Fetching new meal suggestions from API.");
         const response = await apiService.getMealSuggestions();
 
         if (
@@ -246,28 +199,25 @@ export default function InventoryScreen() {
           Array.isArray(response.data) &&
           response.data.length > 0
         ) {
-          // Check if it's an error/info message from our service
           if (
             response.data[0]?.type === "Error" ||
             response.data[0]?.type === "Info"
           ) {
             setSuggestions(response.data);
           } else {
-            // 6. Save new data to cache
             setSuggestions(response.data);
             await AsyncStorage.setItem(
               "cachedMealSuggestions",
-              JSON.stringify(response.data)
+              JSON.stringify(response.data),
             );
             await AsyncStorage.setItem(
               "cachedInventoryString",
-              currentItemNames
+              currentItemNames,
             );
           }
         } else if (response.data?.length === 0) {
-          setSuggestions([]); // Handle empty array from API
+          setSuggestions([]);
         } else {
-          // Handle API error
           const errorMsg =
             response.message ||
             (response.data && response.data[0]?.description) ||
@@ -291,20 +241,59 @@ export default function InventoryScreen() {
       setSuggestionsLoading(false);
     }
   };
-  // *** END MODIFIED function ***
 
-  // --- Main Render ---
+  const renderItem = ({ item }) => (
+    <View style={styles.itemContainer}>
+      <View style={styles.itemIconBox}>
+        <Feather name="box" size={20} color="#6B7280" />
+      </View>
+      <View style={styles.itemTextContainer}>
+        <Text style={styles.itemName}>{item.itemName}</Text>
+        <Text style={styles.itemDetails}>
+          {item.quantity} {item.unit || ""} • Exp: {formatDate(item.expiryDate)}
+        </Text>
+      </View>
+      <View style={styles.itemActions}>
+        <TouchableOpacity
+          onPress={() => handleEditItem(item)}
+          style={styles.actionIconButton}
+        >
+          <Feather name="edit-2" size={18} color="#6B7280" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => handleDeleteItem(item.id)}
+          style={styles.actionIconButton}
+        >
+          <Feather name="trash-2" size={18} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderEmptyList = () => (
+    <View style={styles.emptyContainer}>
+      <Feather
+        name="inbox"
+        size={48}
+        color="#D1D5DB"
+        style={{ marginBottom: 16 }}
+      />
+      <Text style={styles.emptyTitle}>Inventory Empty</Text>
+      <Text style={styles.emptySubtitle}>
+        Tap the '+' button to start tracking your food items.
+      </Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Inventory</Text>
+        <Text style={styles.title}>Inventory</Text>
         <TouchableOpacity onPress={handleAddItem} style={styles.addButton}>
-          <Text style={styles.addButtonText}>+</Text>
+          <Feather name="plus" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
-      {/* Suggest Meals Button */}
       <View style={styles.suggestionButtonContainer}>
         <TouchableOpacity
           style={[
@@ -315,22 +304,22 @@ export default function InventoryScreen() {
           onPress={fetchMealSuggestions}
           disabled={loading || refreshing || inventoryItems.length === 0}
         >
-          <Text style={styles.suggestionButtonText}>
-            🍳 Get Meal Suggestions
-          </Text>
+          <Feather
+            name="loader"
+            size={18}
+            color="#FFFFFF"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.suggestionButtonText}>Generate Meal Ideas</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Loading Indicator */}
       {loading && !refreshing && (
-        <ActivityIndicator
-          size="large"
-          color="#007AFF"
-          style={styles.loadingIndicator}
-        />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#111827" />
+        </View>
       )}
 
-      {/* Inventory List */}
       <FlatList
         data={inventoryItems}
         renderItem={renderItem}
@@ -341,7 +330,7 @@ export default function InventoryScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#007AFF"]}
+            tintColor="#111827"
           />
         }
       />
@@ -362,10 +351,11 @@ export default function InventoryScreen() {
               {isEditing ? "Edit Item" : "Add New Item"}
             </Text>
 
-            <Text style={styles.label}>Item Name *</Text>
+            <Text style={styles.label}>Item Name</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g., Apples, Milk"
+              placeholderTextColor="#9CA3AF"
               value={formData.itemName}
               onChangeText={(text) =>
                 setFormData({ ...formData, itemName: text })
@@ -374,10 +364,11 @@ export default function InventoryScreen() {
 
             <View style={styles.row}>
               <View style={styles.column}>
-                <Text style={styles.label}>Quantity *</Text>
+                <Text style={styles.label}>Quantity</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., 5, 1.5"
+                  placeholder="e.g., 5"
+                  placeholderTextColor="#9CA3AF"
                   value={formData.quantity}
                   onChangeText={(text) =>
                     setFormData({
@@ -392,7 +383,8 @@ export default function InventoryScreen() {
                 <Text style={styles.label}>Unit</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., pieces, kg, L"
+                  placeholder="e.g., kg, L"
+                  placeholderTextColor="#9CA3AF"
                   value={formData.unit}
                   onChangeText={(text) =>
                     setFormData({ ...formData, unit: text })
@@ -401,10 +393,11 @@ export default function InventoryScreen() {
               </View>
             </View>
 
-            <Text style={styles.label}>Expiry Date (Optional)</Text>
+            <Text style={styles.label}>Expiry Date</Text>
             <TextInput
               style={styles.input}
               placeholder="YYYY-MM-DD"
+              placeholderTextColor="#9CA3AF"
               value={formData.expiryDate}
               onChangeText={(text) =>
                 setFormData({ ...formData, expiryDate: text })
@@ -422,7 +415,7 @@ export default function InventoryScreen() {
                 style={styles.saveButton}
                 onPress={handleSaveItem}
               >
-                <Text style={styles.saveButtonText}>Save</Text>
+                <Text style={styles.saveButtonText}>Save Item</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -438,11 +431,24 @@ export default function InventoryScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.suggestionsModalContent}>
-            <Text style={styles.modalTitle}>Meal Suggestions</Text>
+            <View style={styles.suggestionsHeader}>
+              <Text style={styles.modalTitle}>Meal Ideas</Text>
+              <TouchableOpacity
+                onPress={() => setSuggestionsModalVisible(false)}
+              >
+                <Feather name="x" size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
             {suggestionsLoading ? (
-              <ActivityIndicator size="large" color="#10B981" />
+              <View style={{ paddingVertical: 40, alignItems: "center" }}>
+                <ActivityIndicator size="large" color="#111827" />
+                <Text style={{ marginTop: 12, color: "#6B7280" }}>
+                  Cooking up ideas...
+                </Text>
+              </View>
             ) : (
-              <ScrollView>
+              <ScrollView showsVerticalScrollIndicator={false}>
                 {suggestions.length > 0 ? (
                   suggestions.map((suggestion, index) => (
                     <View key={index} style={styles.suggestionItem}>
@@ -450,7 +456,7 @@ export default function InventoryScreen() {
                         {suggestion.mealName}
                       </Text>
                       <Text style={styles.suggestionType}>
-                        {suggestion.type} ({suggestion.estimatedPrepTime})
+                        {suggestion.type} • {suggestion.estimatedPrepTime}
                       </Text>
                       <Text style={styles.suggestionDesc}>
                         {suggestion.description}
@@ -470,12 +476,6 @@ export default function InventoryScreen() {
                 )}
               </ScrollView>
             )}
-            <TouchableOpacity
-              style={[styles.cancelButton, { marginTop: 15 }]}
-              onPress={() => setSuggestionsModalVisible(false)}
-            >
-              <Text style={styles.cancelButtonText}>Close</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </RNModal>
@@ -483,213 +483,204 @@ export default function InventoryScreen() {
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f4f8",
+    backgroundColor: "#F9FAFB",
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "android" ? 25 : 20,
-    paddingBottom: 12,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: "#F9FAFB",
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1f2937",
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#111827",
   },
   addButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#111827", // Sleek dark button
     borderRadius: 20,
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
-  },
-  addButtonText: {
-    color: "white",
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: "bold",
-  },
-  loadingIndicator: {
-    marginTop: 50,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   suggestionButtonContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 15,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    backgroundColor: "#F9FAFB",
   },
   suggestionButton: {
-    backgroundColor: "#FF6347", // Tomato Red
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
+    flexDirection: "row",
+    backgroundColor: "#111827", // Premium dark button
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
     elevation: 4,
   },
   suggestionButtonDisabled: {
-    backgroundColor: "#cccccc",
-    elevation: 0,
+    backgroundColor: "#E5E7EB",
     shadowOpacity: 0,
+    elevation: 0,
   },
   suggestionButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "bold",
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
   listContent: {
-    padding: 16,
+    paddingHorizontal: 20,
     paddingBottom: 80,
   },
   itemContainer: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1.5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  itemIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
   },
   itemTextContainer: {
     flex: 1,
-    marginRight: 10,
   },
   itemName: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
+    fontWeight: "700",
+    color: "#111827",
     marginBottom: 4,
   },
   itemDetails: {
     fontSize: 13,
-    color: "#6b7280",
-    marginBottom: 2,
+    color: "#6B7280",
+    fontWeight: "500",
   },
   itemActions: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
   },
-  actionButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginLeft: 8,
-  },
-  editButtonText: {
-    color: "#007AFF",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  deleteButtonText: {
-    color: "#ef4444",
-    fontSize: 14,
-    fontWeight: "500",
+  actionIconButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#F9FAFB",
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: "30%",
+    marginTop: 80,
     paddingHorizontal: 40,
-  },
-  emptyText: {
-    fontSize: 54,
-    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#1f2937",
+    fontWeight: "700",
+    color: "#111827",
     marginBottom: 8,
-    textAlign: "center",
   },
   emptySubtitle: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#6B7280",
     textAlign: "center",
+    lineHeight: 20,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.4)", // Lighter modern overlay
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
   modalContent: {
-    backgroundColor: "white",
-    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
     padding: 24,
-    paddingTop: 20,
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 380,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
   },
   suggestionsModalContent: {
-    backgroundColor: "white",
-    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
     padding: 24,
-    paddingTop: 20,
     width: "100%",
-    maxWidth: 500,
-    maxHeight: "70%",
+    maxWidth: 400,
+    maxHeight: "75%",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  suggestionsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-    color: "#1f2937",
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: Platform.OS === "android" ? 0 : 20, // adjust based on header usage
   },
   label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 6,
-    color: "#374151",
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#4B5563",
+    marginBottom: 8,
     marginLeft: 4,
   },
   input: {
-    backgroundColor: "#f9fafb",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    fontSize: 16,
-    marginBottom: 16,
+    backgroundColor: "#F9FAFB",
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 15,
+    color: "#111827",
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: "#E5E7EB",
   },
   row: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
+    gap: 16,
   },
   column: {
     flex: 1,
@@ -697,59 +688,61 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 16,
+    marginTop: 8,
   },
   cancelButton: {
-    // flex: 1, // This was the problematic style
-    padding: 14,
-    borderRadius: 8,
-    backgroundColor: "#e5e7eb",
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
   },
   cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#4b5563",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#4B5563",
   },
   saveButton: {
     flex: 1,
-    padding: 14,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     backgroundColor: "#007AFF",
     alignItems: "center",
   },
   saveButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "white",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
   suggestionItem: {
-    marginBottom: 15,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   suggestionName: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#1f2937",
-    marginBottom: 3,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
   },
   suggestionType: {
     fontSize: 12,
-    color: "#6b7280",
-    marginBottom: 5,
-    fontStyle: "italic",
+    color: "#6B7280",
+    fontWeight: "600",
+    marginBottom: 8,
   },
   suggestionDesc: {
     fontSize: 14,
-    color: "#4b5563",
+    color: "#4B5563",
     lineHeight: 20,
+    marginBottom: 12,
   },
   suggestionIngredients: {
     fontSize: 12,
-    color: "#374151",
-    marginTop: 5,
-    fontWeight: "500",
+    color: "#007AFF",
+    fontWeight: "600",
   },
 });

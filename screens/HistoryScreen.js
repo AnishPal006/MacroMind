@@ -1,36 +1,32 @@
-// screens/HistoryScreen.js
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  StyleSheet, // <-- Ensure StyleSheet is imported
-  SafeAreaView,
+  StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   SectionList,
   RefreshControl,
-  Image,
-  ScrollView, // <-- Import Image if you want to show food images later
+  ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons"; // <-- Added Vector Icons
 import apiService from "../services/api";
-import NutritionDisplay from "../components/NutritionDisplay"; // <-- Import NutritionDisplay
+import NutritionDisplay from "../components/NutritionDisplay";
 
 export default function HistoryScreen() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedScan, setSelectedScan] = useState(null); // Holds formatted data for display
+  const [selectedScan, setSelectedScan] = useState(null);
 
-  // Fetch history data
   const loadHistory = useCallback(async (isRefreshing = false) => {
     if (!isRefreshing) {
       setLoading(true);
     }
     try {
-      // Fetch individual scans
-      const response = await apiService.getFoodScans(); // Fetches last 30 days by default (as per backend/src/routes/logs.js)
+      const response = await apiService.getFoodScans();
       if (response.success && Array.isArray(response.data)) {
         const groupedData = transformHistoryData(response.data);
         setHistory(groupedData);
@@ -46,47 +42,34 @@ export default function HistoryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []); // Empty dependency array, created once
+  }, []);
 
-  // Load history when the component mounts
-  // useEffect(() => {
-  //   loadHistory();
-  // }, [loadHistory]); // Run once on mount
-
-  // Transform scan data into sections grouped by date
   const transformHistoryData = (scans) => {
-    if (!scans || scans.length === 0) {
-      return [];
-    }
+    if (!scans || scans.length === 0) return [];
+
     const grouped = {};
     scans.forEach((scan) => {
-      // Ensure scanDate exists and is valid before processing
-      if (!scan.scanDate || isNaN(new Date(scan.scanDate).getTime())) {
-        console.warn("Invalid or missing scanDate for scan:", scan.id);
-        return; // Skip this scan
-      }
-      const dateObj = new Date(scan.scanDate + "T00:00:00"); // Ensure it's treated as local date
+      if (!scan.scanDate || isNaN(new Date(scan.scanDate).getTime())) return;
+
+      const dateObj = new Date(scan.scanDate + "T00:00:00");
       const dateStr = dateObj.toLocaleDateString("en-US", {
         weekday: "long",
         month: "short",
         day: "numeric",
-        year: "numeric", // Add year for clarity
       });
 
       if (!grouped[dateStr]) {
         grouped[dateStr] = [];
       }
-      grouped[dateStr].push(scan); // Add the whole scan object
+      grouped[dateStr].push(scan);
     });
 
-    // Convert to section list format and sort sections by date descending
     return Object.entries(grouped)
-      .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA)) // Sort sections by date
+      .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
       .map(([title, data]) => ({
         title,
-        // Sort items within each section by scanned time descending
         data: data.sort(
-          (a, b) => new Date(b.scannedAt) - new Date(a.scannedAt)
+          (a, b) => new Date(b.scannedAt) - new Date(a.scannedAt),
         ),
       }));
   };
@@ -95,24 +78,19 @@ export default function HistoryScreen() {
     loadHistory();
   }, [loadHistory]);
 
-  // Handler for pull-to-refresh
   const onRefresh = () => {
     setRefreshing(true);
-    loadHistory(true); // Pass true to indicate refresh
+    loadHistory(true);
   };
 
-  // Function to format scan data for NutritionDisplay
   const formatScanForDisplay = (scan) => {
-    if (!scan || !scan.food) {
-      console.warn("Attempted to format invalid scan:", scan);
-      return { productName: null }; // Error structure for NutritionDisplay
-    }
+    if (!scan || !scan.food) return { productName: null };
 
     const multiplier = scan.quantityGrams / 100;
     const nutrition = {
       calories: Math.round((scan.food.caloriesPer100g || 0) * multiplier),
       protein: parseFloat(
-        ((scan.food.proteinGrams || 0) * multiplier).toFixed(1)
+        ((scan.food.proteinGrams || 0) * multiplier).toFixed(1),
       ),
       carbs: parseFloat(((scan.food.carbsGrams || 0) * multiplier).toFixed(1)),
       fats: parseFloat(((scan.food.fatsGrams || 0) * multiplier).toFixed(1)),
@@ -121,7 +99,6 @@ export default function HistoryScreen() {
       sodium: parseFloat(((scan.food.sodiumMg || 0) * multiplier).toFixed(1)),
     };
 
-    // Construct full image URL if applicable and storing locally
     const imageUrl = scan.imageUrl
       ? `${process.env.EXPO_PUBLIC_API_URL.replace("/api", "")}${scan.imageUrl}`
       : null;
@@ -129,7 +106,7 @@ export default function HistoryScreen() {
     return {
       productName: scan.food.name,
       summary: `${nutrition.calories} calories per ${scan.quantityGrams}g serving`,
-      imageUrl: imageUrl, // Include image URL if you want NutritionDisplay to show it
+      imageUrl: imageUrl,
       macronutrients: {
         calories: `${nutrition.calories} kcal`,
         protein: `${nutrition.protein}g`,
@@ -140,12 +117,10 @@ export default function HistoryScreen() {
         `Fiber: ${nutrition.fiber}g`,
         `Sugar: ${nutrition.sugar}g`,
         `Sodium: ${nutrition.sodium}mg`,
-        // Conditionally add allergens if they exist
         ...(scan.food.allergens && scan.food.allergens.length > 0
           ? [`Allergens: ${scan.food.allergens.join(", ")}`]
           : []),
       ],
-      // Use scan's specific allergen warning status
       additionalInfo: scan.allergenWarning
         ? `⚠️ Allergen Warning: Contains potential allergens relevant to you.`
         : `Category: ${scan.food.category || "N/A"}`,
@@ -155,25 +130,19 @@ export default function HistoryScreen() {
           : {
               suitability: "neutral",
               reason: "Health advice not recorded for this scan.",
-            }, // Default if missing
+            },
     };
   };
 
-  // Handle item press to show details
   const handleItemPress = async (item) => {
     if (!item || !item.foodId) return;
-
-    // 1. Show basic details immediately
     const basicFormattedData = formatScanForDisplay(item);
-    setSelectedScan(basicFormattedData); // Show nutrition info without advice yet
+    setSelectedScan(basicFormattedData);
   };
 
-  // Handle deleting an item
   const handleDeleteItem = (scanId) => {
-    if (!scanId) {
-      console.error("Delete failed: Invalid scanId provided.");
-      return;
-    }
+    if (!scanId) return;
+
     Alert.alert(
       "Delete Scan",
       "Are you sure you want to delete this scan entry?",
@@ -184,10 +153,9 @@ export default function HistoryScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              setLoading(true); // Show loading indicator during deletion
+              setLoading(true);
               const response = await apiService.removeFoodScan(scanId);
               if (response.success) {
-                // Reload history after successful deletion
                 loadHistory();
               } else {
                 throw new Error(response.message || "Failed to delete scan.");
@@ -196,19 +164,30 @@ export default function HistoryScreen() {
               console.error("Delete scan error:", error);
               Alert.alert(
                 "Error",
-                error.message || "Could not delete the scan."
+                error.message || "Could not delete the scan.",
               );
-              setLoading(false); // Hide loading on error
+              setLoading(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
-  // Render each history item in the list
+  const getMealIcon = (mealType) => {
+    switch (mealType?.toLowerCase()) {
+      case "breakfast":
+        return "sunrise";
+      case "lunch":
+        return "sun";
+      case "dinner":
+        return "moon";
+      default:
+        return "coffee";
+    }
+  };
+
   const renderHistoryItem = ({ item }) => {
-    // Basic calculation for display in the list item itself
     const multiplier = item.quantityGrams / 100;
     const calories = Math.round((item.food?.caloriesPer100g || 0) * multiplier);
     const scanTime = item.scannedAt
@@ -219,76 +198,82 @@ export default function HistoryScreen() {
       : "N/A";
 
     return (
-      <TouchableOpacity onPress={() => handleItemPress(item)}>
+      <TouchableOpacity
+        onPress={() => handleItemPress(item)}
+        activeOpacity={0.7}
+      >
         <View style={styles.historyItem}>
-          <View style={styles.itemHeader}>
-            <View style={styles.itemHeaderText}>
-              <Text
-                style={styles.foodName}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {item.food?.name || "Unknown Food"}
-              </Text>
-              <Text style={styles.mealType}>
-                {item.mealType.charAt(0).toUpperCase() + item.mealType.slice(1)}{" "}
-                - {item.quantityGrams}g ({calories} kcal)
-              </Text>
-              <Text style={styles.scanTimeText}>{scanTime}</Text>
-            </View>
+          <View style={styles.iconContainer}>
+            <Feather
+              name={getMealIcon(item.mealType)}
+              size={20}
+              color="#6B7280"
+            />
+          </View>
+
+          <View style={styles.itemHeaderText}>
+            <Text style={styles.foodName} numberOfLines={1}>
+              {item.food?.name || "Unknown Food"}
+            </Text>
+            <Text style={styles.mealType}>
+              {item.mealType.charAt(0).toUpperCase() + item.mealType.slice(1)} •{" "}
+              {item.quantityGrams}g • {scanTime}
+            </Text>
+          </View>
+
+          <View style={styles.itemRightSide}>
+            <Text style={styles.calorieText}>
+              {calories} <Text style={styles.kcalText}>kcal</Text>
+            </Text>
             <TouchableOpacity
               onPress={() => handleDeleteItem(item.id)}
               style={styles.deleteButtonContainer}
             >
-              <Text style={styles.deleteButton}>✕</Text>
+              <Feather name="trash-2" size={18} color="#EF4444" />
             </TouchableOpacity>
           </View>
-          {/* Optional: Add image thumbnail here if needed */}
-          {/* {item.imageUrl && <Image source={{ uri: `${process.env.EXPO_PUBLIC_API_URL.replace('/api', '')}${item.imageUrl}` }} style={styles.foodImageThumbnail} />} */}
         </View>
       </TouchableOpacity>
     );
   };
 
-  // Render the header for each date section
   const renderSectionHeader = ({ section: { title } }) => (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
 
-  // Main component render
   return (
     <SafeAreaView style={styles.container}>
-      {/* Screen Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Scan History</Text>
-        <Text style={styles.subtitle}>Your recent food scans</Text>
+        <Text style={styles.title}>History</Text>
       </View>
 
-      {/* Conditional Rendering: Loading, Empty State, or List */}
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading history...</Text>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#111827" />
         </View>
       ) : history.length === 0 ? (
-        // Use ScrollView for empty state to allow pull-to-refresh
         <ScrollView
-          contentContainerStyle={styles.emptyStateContainer} // Use a different style for centering
+          contentContainerStyle={styles.emptyStateContainer}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#007AFF"]}
+              tintColor="#111827"
             />
           }
         >
           <View style={styles.emptyStateContent}>
-            <Text style={styles.emptyStateText}>📊</Text>
+            <Feather
+              name="clock"
+              size={48}
+              color="#D1D5DB"
+              style={{ marginBottom: 16 }}
+            />
             <Text style={styles.emptyStateTitle}>No Scans Yet</Text>
             <Text style={styles.emptyStateSubtitle}>
-              Start scanning food items to see your history here. Pull down to
+              Start scanning food items to see your timeline. Pull down to
               refresh.
             </Text>
           </View>
@@ -296,7 +281,7 @@ export default function HistoryScreen() {
       ) : (
         <SectionList
           sections={history}
-          keyExtractor={(item) => item.id.toString()} // Ensure key is a string
+          keyExtractor={(item) => item.id.toString()}
           renderItem={renderHistoryItem}
           renderSectionHeader={renderSectionHeader}
           contentContainerStyle={styles.listContent}
@@ -304,152 +289,134 @@ export default function HistoryScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#007AFF"]}
+              tintColor="#111827"
             />
           }
-          stickySectionHeadersEnabled={false} // Keep headers static on scroll
+          stickySectionHeadersEnabled={false}
         />
       )}
 
-      {/* Nutrition Display Overlay */}
       {selectedScan && (
         <NutritionDisplay
           data={selectedScan}
           onClose={() => setSelectedScan(null)}
-          closeButtonLabel="CLOSE" // <--- This tells it to display "CLOSE"
+          closeButtonLabel="CLOSE"
         />
       )}
     </SafeAreaView>
   );
 }
 
-// Styles (Make sure StyleSheet is imported from react-native)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f4f8", // Light background
+    backgroundColor: "#F9FAFB",
   },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f0f4f8",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#6b7280",
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 20, // Adjust top padding if needed based on SafeAreaView
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    backgroundColor: "white", // White header background
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: "#F9FAFB",
   },
   title: {
     fontSize: 28,
-    fontWeight: "bold",
-    color: "#1f2937", // Darker text
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#6b7280", // Gray text
-    marginTop: 4,
+    fontWeight: "800",
+    color: "#111827",
   },
   listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8, // Add some top padding to the list
-    paddingBottom: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   sectionHeader: {
-    marginTop: 16, // Space above date headers
-    marginBottom: 8,
-    paddingLeft: 4,
+    marginTop: 24,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#4b5563", // Medium gray text
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   historyItem: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 1.5,
-  },
-  itemHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start", // Align top
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
   },
   itemHeaderText: {
-    flex: 1, // Allow text to take space and wrap if needed
-    marginRight: 10,
+    flex: 1,
+    justifyContent: "center",
   },
   foodName: {
-    fontSize: 15, // Slightly smaller food name
-    fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 2,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
   },
   mealType: {
     fontSize: 13,
-    color: "#6b7280",
-    marginBottom: 4,
+    color: "#6B7280",
+    fontWeight: "500",
   },
-  scanTimeText: {
+  itemRightSide: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+  calorieText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  kcalText: {
     fontSize: 12,
-    color: "#9ca3af", // Lighter gray for time
+    color: "#9CA3AF",
+    fontWeight: "500",
   },
   deleteButtonContainer: {
-    paddingLeft: 10, // Easier to tap
-    paddingTop: 2,
-  },
-  deleteButton: {
-    fontSize: 18,
-    color: "#ef4444", // Red color for delete
-    fontWeight: "bold",
+    padding: 4,
   },
   emptyStateContainer: {
-    // Style for the ScrollView containing empty state
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   emptyStateContent: {
-    // Style for the content inside the empty state ScrollView
     alignItems: "center",
     paddingHorizontal: 40,
   },
-  emptyStateText: {
-    // Emoji style
-    fontSize: 54,
-    marginBottom: 16,
-  },
   emptyStateTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#1f2937",
+    fontWeight: "700",
+    color: "#111827",
     marginBottom: 8,
-    textAlign: "center",
   },
   emptyStateSubtitle: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#6B7280",
     textAlign: "center",
+    lineHeight: 20,
   },
-  // Optional: Add styles for image thumbnail if you include it
-  // foodImageThumbnail: {
-  //   width: 50,
-  //   height: 50,
-  //   borderRadius: 8,
-  //   marginTop: 8,
-  // },
 });

@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context"; // <-- Added Provider
+import { Feather } from "@expo/vector-icons"; // <-- Added Vector Icons
 import ScannerScreen from "./screens/ScannerScreen";
 import AuthScreen from "./screens/AuthScreen";
 import DashboardScreen from "./screens/DashboardScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import HistoryScreen from "./screens/HistoryScreen";
-import InventoryScreen from "./screens/InventoryScreen"; // <-- Import InventoryScreen
+import InventoryScreen from "./screens/InventoryScreen";
 import apiService from "./services/api";
 
 export default function App() {
@@ -54,179 +56,194 @@ export default function App() {
     setCurrentTab("dashboard");
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
-  }
-
   const renderScreen = () => {
     switch (currentTab) {
       case "dashboard":
-        return <DashboardScreen currentUser={currentUser} />;
+        // <-- Passed onNavigate here
+        return (
+          <DashboardScreen
+            currentUser={currentUser}
+            onNavigate={setCurrentTab}
+          />
+        );
       case "scanner":
         return <ScannerScreen />;
       case "history":
         return <HistoryScreen />;
-      case "inventory": // <-- Add case for Inventory
+      case "inventory":
         return <InventoryScreen />;
       case "profile":
         return <ProfileScreen onLogout={handleLogout} />;
       default:
-        return <DashboardScreen currentUser={currentUser} />;
+        // <-- Passed onNavigate here
+        return (
+          <DashboardScreen
+            currentUser={currentUser}
+            onNavigate={setCurrentTab}
+          />
+        );
     }
   };
 
+  // Wrapped the entire output in SafeAreaProvider to prevent freezing bugs
   return (
-    <View style={styles.container}>
-      {renderScreen()}
+    <SafeAreaProvider>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#111827" />
+        </View>
+      ) : !isAuthenticated ? (
+        <AuthScreen onAuthSuccess={handleAuthSuccess} />
+      ) : (
+        <View style={styles.container}>
+          {renderScreen()}
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={[
-            styles.navButton,
-            currentTab === "dashboard" && styles.navButtonActive,
-          ]}
-          onPress={() => setCurrentTab("dashboard")}
-        >
-          <Text
-            style={[
-              styles.navButtonText,
-              currentTab === "dashboard" && styles.navButtonTextActive,
-            ]}
-          >
-            📊 Dashboard
-          </Text>
-        </TouchableOpacity>
+          {/* Modern Minimalist Bottom Navigation */}
+          <View style={styles.bottomNav}>
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => setCurrentTab("dashboard")}
+            >
+              <Feather
+                name="grid"
+                size={22}
+                color={currentTab === "dashboard" ? "#111827" : "#9CA3AF"}
+              />
+              <Text
+                style={[
+                  styles.navButtonText,
+                  currentTab === "dashboard" && styles.navButtonTextActive,
+                ]}
+              >
+                Dashboard
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.navButton,
-            currentTab === "scanner" && styles.navButtonActive,
-          ]}
-          onPress={() => setCurrentTab("scanner")}
-        >
-          <Text
-            style={[
-              styles.navButtonText,
-              currentTab === "scanner" && styles.navButtonTextActive,
-            ]}
-          >
-            📷 Scan
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => setCurrentTab("scanner")}
+            >
+              <Feather
+                name="maximize"
+                size={22}
+                color={currentTab === "scanner" ? "#007AFF" : "#9CA3AF"}
+              />
+              <Text
+                style={[
+                  styles.navButtonText,
+                  currentTab === "scanner" && styles.scanTextActive,
+                ]}
+              >
+                Scan
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.navButton,
-            currentTab === "history" && styles.navButtonActive,
-          ]}
-          onPress={() => setCurrentTab("history")}
-        >
-          <Text
-            style={[
-              styles.navButtonText,
-              currentTab === "history" && styles.navButtonTextActive,
-            ]}
-          >
-            📜 History
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => setCurrentTab("history")}
+            >
+              <Feather
+                name="clock"
+                size={22}
+                color={currentTab === "history" ? "#111827" : "#9CA3AF"}
+              />
+              <Text
+                style={[
+                  styles.navButtonText,
+                  currentTab === "history" && styles.navButtonTextActive,
+                ]}
+              >
+                History
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.navButton,
-            currentTab === "inventory" && styles.navButtonActive,
-          ]}
-          onPress={() => setCurrentTab("inventory")}
-        >
-          <Text
-            style={[
-              styles.navButtonText,
-              currentTab === "inventory" && styles.navButtonTextActive,
-            ]}
-          >
-            🧺 Inventory {/* Example Icon */}
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => setCurrentTab("inventory")}
+            >
+              <Feather
+                name="archive"
+                size={22}
+                color={currentTab === "inventory" ? "#111827" : "#9CA3AF"}
+              />
+              <Text
+                style={[
+                  styles.navButtonText,
+                  currentTab === "inventory" && styles.navButtonTextActive,
+                ]}
+              >
+                Inventory
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.navButton,
-            currentTab === "profile" && styles.navButtonActive,
-          ]}
-          onPress={() => setCurrentTab("profile")}
-        >
-          <Text
-            style={[
-              styles.navButtonText,
-              currentTab === "profile" && styles.navButtonTextActive,
-            ]}
-          >
-            👤 Profile
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={() => setCurrentTab("profile")}
+            >
+              <Feather
+                name="user"
+                size={22}
+                color={currentTab === "profile" ? "#111827" : "#9CA3AF"}
+              />
+              <Text
+                style={[
+                  styles.navButtonText,
+                  currentTab === "profile" && styles.navButtonTextActive,
+                ]}
+              >
+                Profile
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-      <StatusBar style="auto" />
-    </View>
+          <StatusBar style="auto" />
+        </View>
+      )}
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f4f8",
+    backgroundColor: "#F9FAFB", // Minimalist off-white background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f0f4f8",
+    backgroundColor: "#F9FAFB",
   },
   bottomNav: {
     flexDirection: "row",
-    backgroundColor: "white",
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingBottom: Platform.OS === "ios" ? 30 : 20, // More padding for iOS home indicator
-    paddingTop: 10,
+    backgroundColor: "#FFFFFF",
+    paddingBottom: Platform.OS === "ios" ? 30 : 15,
+    paddingTop: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05, // Subtle shadow
-    shadowRadius: 5,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.04, // Very soft shadow
+    shadowRadius: 15,
+    elevation: 10,
+    borderTopWidth: 0, // Removed harsh border
   },
   navButton: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8, // Adjust vertical padding
-  },
-  navButtonActive: {
-    // Optional: Use a different indicator like background color or borderTopWidth
-    backgroundColor: "#eef2ff", // Example active background
-    borderTopWidth: 3, // Example active border top
-    borderTopColor: "#007AFF",
-    paddingTop: 7, // Adjust padding if using borderTop
-    // Remove bottom border if using top border or background
-    // borderBottomWidth: 3,
-    // borderBottomColor: "#007AFF",
+    justifyContent: "center",
+    gap: 4, // Space between icon and text
   },
   navButtonText: {
-    fontSize: 11, // Slightly smaller font size for 5 tabs
-    color: "#6b7280",
-    fontWeight: "600",
-    textAlign: "center", // Ensure text centers if it wraps
+    fontSize: 10,
+    color: "#9CA3AF",
+    fontWeight: "500",
+    marginTop: 2,
   },
   navButtonTextActive: {
-    color: "#007AFF",
-    fontWeight: "700", // Make active text bolder
+    color: "#111827", // Almost black for standard active tabs
+    fontWeight: "700",
+  },
+  scanTextActive: {
+    color: "#007AFF", // Keep blue for the primary action tab
+    fontWeight: "700",
   },
 });

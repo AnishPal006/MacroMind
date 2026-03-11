@@ -1,5 +1,3 @@
-// screens/AuthScreen.js
-
 import React, { useState } from "react";
 import {
   View,
@@ -7,39 +5,38 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  Alert,
   ActivityIndicator,
-  KeyboardAvoidingView, // Ensure this is imported
-  Platform, // Ensure this is imported
-  ScrollView, // Ensure this is imported
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Alert,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Feather } from "@expo/vector-icons"; // <-- Modern Icons
 import apiService from "../services/api";
 
 export default function AuthScreen({ onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // *** ENSURE STATE INCLUDES ALL FORM FIELDS ***
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     fullName: "",
     age: "",
     gender: "other",
-    allergiesInput: "", // <-- This property must exist
-    healthConditionsInput: "", // <-- This property must exist
+    allergiesInput: "",
+    healthConditionsInput: "",
   });
 
   const handleSubmit = async () => {
-    // Basic validation
     if (!formData.email || !formData.password) {
-      Alert.alert("Error", "Please fill in all required fields");
+      Alert.alert("Missing Fields", "Please enter your email and password.");
       return;
     }
 
     if (!isLogin && !formData.fullName) {
-      Alert.alert("Error", "Please enter your full name");
+      Alert.alert("Missing Name", "Please enter your full name.");
       return;
     }
 
@@ -49,7 +46,6 @@ export default function AuthScreen({ onAuthSuccess }) {
       if (isLogin) {
         response = await apiService.login(formData.email, formData.password);
       } else {
-        // Prepare arrays from comma-separated strings
         const allergies = formData.allergiesInput
           .split(",")
           .map((s) => s.trim())
@@ -65,20 +61,25 @@ export default function AuthScreen({ onAuthSuccess }) {
           fullName: formData.fullName,
           age: formData.age ? parseInt(formData.age) : null,
           gender: formData.gender,
-          allergies: allergies, // Pass as array
-          healthConditions: healthConditions, // Pass as array
+          allergies: allergies,
+          healthConditions: healthConditions,
         });
       }
 
       if (response.success) {
-        Alert.alert("Success", response.message);
         onAuthSuccess?.(response.data.user);
       } else {
         throw new Error(response.message || "Authentication failed");
       }
     } catch (error) {
       console.error("Auth Error:", error);
-      Alert.alert("Error", error.message || "Authentication failed");
+      // Helpful error message for the common localhost mistake
+      const errorMessage =
+        error.message === "Network request failed"
+          ? "Cannot connect to server. Ensure EXPO_PUBLIC_API_URL is set to your computer's IP address."
+          : error.message;
+
+      Alert.alert("Authentication Failed", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -90,67 +91,121 @@ export default function AuthScreen({ onAuthSuccess }) {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <Feather name="activity" size={40} color="#111827" />
+            </View>
             <Text style={styles.title}>MacroMind</Text>
             <Text style={styles.subtitle}>
-              {isLogin ? "Welcome Back" : "Create Account"}
+              {isLogin
+                ? "Welcome back, sign in to continue"
+                : "Create an account to get started"}
             </Text>
           </View>
 
-          <View style={styles.form}>
+          <View style={styles.formContainer}>
             {!isLogin && (
-              <TextInput
-                style={styles.input}
-                placeholder="Full Name *" // Placeholder text
-                value={formData.fullName}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, fullName: text })
-                }
-                autoCapitalize="words"
-                placeholderTextColor="#9ca3af" // Add placeholder text color
-              />
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Full Name</Text>
+                <View style={styles.inputWrapper}>
+                  <Feather
+                    name="user"
+                    size={20}
+                    color="#9CA3AF"
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="John Doe"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.fullName}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, fullName: text })
+                    }
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
             )}
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email *" // Placeholder text
-              value={formData.email}
-              onChangeText={(text) => setFormData({ ...formData, email: text })}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor="#9ca3af" // Add placeholder text color
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email Address</Text>
+              <View style={styles.inputWrapper}>
+                <Feather
+                  name="mail"
+                  size={20}
+                  color="#9CA3AF"
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="you@example.com"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.email}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, email: text })
+                  }
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Password *" // Placeholder text
-              value={formData.password}
-              onChangeText={(text) =>
-                setFormData({ ...formData, password: text })
-              }
-              secureTextEntry
-              placeholderTextColor="#9ca3af" // Add placeholder text color
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.inputWrapper}>
+                <Feather
+                  name="lock"
+                  size={20}
+                  color="#9CA3AF"
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.password}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, password: text })
+                  }
+                  secureTextEntry
+                />
+              </View>
+            </View>
 
             {!isLogin && (
               <>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Age (optional)"
-                  value={formData.age}
-                  onChangeText={(text) =>
-                    setFormData({
-                      ...formData,
-                      age: text.replace(/[^0-9]/g, ""),
-                    })
-                  }
-                  keyboardType="numeric"
-                  placeholderTextColor="#9ca3af" // Add placeholder text color
-                />
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Age (Optional)</Text>
+                  <View style={styles.inputWrapper}>
+                    <Feather
+                      name="calendar"
+                      size={20}
+                      color="#9CA3AF"
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., 25"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.age}
+                      onChangeText={(text) =>
+                        setFormData({
+                          ...formData,
+                          age: text.replace(/[^0-9]/g, ""),
+                        })
+                      }
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
 
-                <View style={styles.genderContainer}>
-                  <Text style={styles.label}>Gender:</Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Gender</Text>
                   <View style={styles.genderButtons}>
                     {["male", "female", "other"].map((gender) => (
                       <TouchableOpacity
@@ -176,32 +231,54 @@ export default function AuthScreen({ onAuthSuccess }) {
                   </View>
                 </View>
 
-                {/* New Health Fields */}
-                <Text style={styles.label}>Allergies (comma-separated)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Peanuts, Shellfish"
-                  value={formData.allergiesInput} // This now correctly binds to state
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, allergiesInput: text })
-                  }
-                  autoCapitalize="words"
-                  placeholderTextColor="#9ca3af" // Add placeholder text color
-                />
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Allergies (comma-separated)</Text>
+                  <View style={styles.inputWrapper}>
+                    <Feather
+                      name="alert-triangle"
+                      size={20}
+                      color="#9CA3AF"
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., Peanuts, Dairy"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.allergiesInput}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, allergiesInput: text })
+                      }
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
 
-                <Text style={styles.label}>
-                  Health Conditions (comma-separated)
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Diabetes, High Cholesterol"
-                  value={formData.healthConditionsInput} // This now correctly binds to state
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, healthConditionsInput: text })
-                  }
-                  autoCapitalize="words"
-                  placeholderTextColor="#9ca3af" // Add placeholder text color
-                />
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Health Conditions (comma-separated)
+                  </Text>
+                  <View style={styles.inputWrapper}>
+                    <Feather
+                      name="heart"
+                      size={20}
+                      color="#9CA3AF"
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., Diabetes"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.healthConditionsInput}
+                      onChangeText={(text) =>
+                        setFormData({
+                          ...formData,
+                          healthConditionsInput: text,
+                        })
+                      }
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
               </>
             )}
 
@@ -214,24 +291,26 @@ export default function AuthScreen({ onAuthSuccess }) {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="white" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.submitButtonText}>
-                  {isLogin ? "Login" : "Sign Up"}
+                  {isLogin ? "Sign In" : "Create Account"}
                 </Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.switchButton}
-              onPress={() => setIsLogin(!isLogin)}
-            >
-              <Text style={styles.switchButtonText}>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
                 {isLogin
-                  ? "Don't have an account? Sign Up"
-                  : "Already have an account? Login"}
+                  ? "Don't have an account? "
+                  : "Already have an account? "}
               </Text>
-            </TouchableOpacity>
+              <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+                <Text style={styles.switchButtonText}>
+                  {isLogin ? "Sign Up" : "Log In"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -239,104 +318,142 @@ export default function AuthScreen({ onAuthSuccess }) {
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f4f8",
+    backgroundColor: "#F9FAFB",
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: "center",
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   header: {
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: 48,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 4,
   },
   title: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "#1f2937",
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#111827",
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 18,
-    color: "#6b7280",
+    fontSize: 15,
+    color: "#6B7280",
+    fontWeight: "500",
   },
-  form: {
+  formContainer: {
     width: "100%",
   },
-  input: {
-    backgroundColor: "white",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    color: "#111827", // Ensure input text is visible
+  inputGroup: {
+    marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#4b5563",
-    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#4B5563",
+    marginBottom: 8,
     marginLeft: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  genderContainer: {
-    marginBottom: 15,
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 18,
+    fontSize: 16,
+    color: "#111827",
   },
   genderButtons: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
+    gap: 12,
   },
   genderButton: {
     flex: 1,
-    padding: 12,
+    paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: "white",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#E5E7EB",
     alignItems: "center",
   },
   genderButtonActive: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
+    backgroundColor: "#111827",
+    borderColor: "#111827",
   },
   genderButtonText: {
-    color: "#6b7280",
+    color: "#6B7280",
     fontSize: 14,
     fontWeight: "600",
   },
   genderButtonTextActive: {
-    color: "white",
+    color: "#FFFFFF",
   },
   submitButton: {
     backgroundColor: "#007AFF",
-    padding: 18,
-    borderRadius: 12,
+    paddingVertical: 18,
+    borderRadius: 16,
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 12,
+    shadowColor: "#007AFF",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
   },
   submitButtonDisabled: {
-    backgroundColor: "#9ca3af",
+    backgroundColor: "#9CA3AF",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   submitButtonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
-  switchButton: {
-    marginTop: 20,
-    alignItems: "center",
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 32,
+  },
+  footerText: {
+    color: "#6B7280",
+    fontSize: 15,
   },
   switchButtonText: {
     color: "#007AFF",
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: "700",
   },
 });

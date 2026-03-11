@@ -35,6 +35,7 @@ class ApiService {
     }
 
     try {
+      console.log(`Connecting to: ${API_URL}${endpoint}`);
       const response = await fetch(`${API_URL}${endpoint}`, {
         ...options,
         headers,
@@ -120,6 +121,13 @@ class ApiService {
       throw new Error(data.message || "Scan failed");
     }
     return data;
+  }
+
+  async scanBarcode(barcode, mealType, quantityGrams) {
+    return this.request("/food/scan-barcode", {
+      method: "POST",
+      body: JSON.stringify({ barcode, mealType, quantityGrams }),
+    });
   }
 
   async manualFoodEntry(foodData) {

@@ -1,5 +1,8 @@
 const { Sequelize } = require("sequelize");
 
+// Check if the environment is production
+const isProduction = process.env.NODE_ENV === "production";
+
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   dialect: "postgres",
   logging: process.env.NODE_ENV === "development" ? console.log : false,
@@ -14,12 +17,17 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
     underscored: false,
     freezeTableName: true,
   },
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false, // This is often necessary for free tier cloud databases
-    },
-  },
+  // Only apply SSL options if running in production
+  ...(isProduction
+    ? {
+        dialectOptions: {
+          ssl: {
+            require: true,
+            rejectUnauthorized: false, // This is often necessary for free tier cloud databases
+          },
+        },
+      }
+    : {}),
 });
 
 // Test connection

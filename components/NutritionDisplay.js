@@ -6,29 +6,29 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  ActivityIndicator, // Keep this if you have the loading state here
 } from "react-native";
+import { Feather } from "@expo/vector-icons"; // <-- Added Vector Icons
 
-// No changes to props needed for this fix
 export default function NutritionDisplay({
   data,
   onClose,
-  closeButtonLabel = "CLOSE",
+  closeButtonLabel = "Close",
 }) {
-  // --- Error Handling --- (Keep existing)
   if (!data || !data.productName) {
     return (
       <View style={styles.modalOverlay}>
         <SafeAreaView style={styles.container}>
+          <View style={styles.errorIconContainer}>
+            <Feather name="alert-circle" size={48} color="#EF4444" />
+          </View>
           <Text style={styles.errorTitle}>Analysis Failed</Text>
           <Text style={styles.errorText}>
             The AI could not recognize a food product or its nutrition label.
             Please try again with a clearer image.
           </Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            {/* Use the prop, or default for error */}
             <Text style={styles.closeButtonText}>
-              {closeButtonLabel || "TRY AGAIN"}
+              {closeButtonLabel === "CLOSE" ? "Try Again" : closeButtonLabel}
             </Text>
           </TouchableOpacity>
         </SafeAreaView>
@@ -45,47 +45,91 @@ export default function NutritionDisplay({
     healthAdvice,
   } = data;
 
-  // --- Helper functions for health advice styling --- (Keep existing)
+  // Fully implemented helper functions
   const getHealthAdviceStyle = (suitability) => {
-    /* ... */
+    switch (suitability?.toLowerCase()) {
+      case "good":
+        return styles.healthAdviceGood;
+      case "bad":
+        return styles.healthAdviceBad;
+      default:
+        return styles.healthAdviceNeutral;
+    }
   };
+
   const getHealthAdviceIcon = (suitability) => {
-    /* ... */
+    switch (suitability?.toLowerCase()) {
+      case "good":
+        return <Feather name="check-circle" size={18} color="#10B981" />;
+      case "bad":
+        return <Feather name="alert-triangle" size={18} color="#EF4444" />;
+      default:
+        return <Feather name="info" size={18} color="#F59E0B" />;
+    }
   };
 
   return (
     <View style={styles.modalOverlay}>
-      {/* Apply the container style directly to SafeAreaView */}
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Drag Indicator Pill */}
+        <View style={styles.dragPill} />
+
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.productName}>{productName}</Text>
           <Text style={styles.summary}>{summary}</Text>
 
           {/* --- Macronutrients Grid --- */}
           <View style={styles.macroGrid}>
-            <View style={[styles.macroCard, { backgroundColor: "#e0f2fe" }]}>
+            <View style={styles.macroCard}>
+              <Feather
+                name="zap"
+                size={20}
+                color="#F59E0B"
+                style={styles.macroIcon}
+              />
+              <Text style={styles.macroValue}>
+                {macronutrients?.calories || "0"}
+              </Text>
               <Text style={styles.macroLabel}>Calories</Text>
-              <Text style={styles.macroValue}>
-                {macronutrients?.calories || "N/A"}
-              </Text>
             </View>
-            <View style={[styles.macroCard, { backgroundColor: "#dcfce7" }]}>
+            <View style={styles.macroCard}>
+              <Feather
+                name="target"
+                size={20}
+                color="#10B981"
+                style={styles.macroIcon}
+              />
+              <Text style={styles.macroValue}>
+                {macronutrients?.protein || "0g"}
+              </Text>
               <Text style={styles.macroLabel}>Protein</Text>
-              <Text style={styles.macroValue}>
-                {macronutrients?.protein || "N/A"}
-              </Text>
             </View>
-            <View style={[styles.macroCard, { backgroundColor: "#fef3c7" }]}>
+            <View style={styles.macroCard}>
+              <Feather
+                name="wind"
+                size={20}
+                color="#3B82F6"
+                style={styles.macroIcon}
+              />
+              <Text style={styles.macroValue}>
+                {macronutrients?.carbohydrates || "0g"}
+              </Text>
               <Text style={styles.macroLabel}>Carbs</Text>
-              <Text style={styles.macroValue}>
-                {macronutrients?.carbohydrates || "N/A"}
-              </Text>
             </View>
-            <View style={[styles.macroCard, { backgroundColor: "#fee2e2" }]}>
-              <Text style={styles.macroLabel}>Fat</Text>
+            <View style={styles.macroCard}>
+              <Feather
+                name="droplet"
+                size={20}
+                color="#EF4444"
+                style={styles.macroIcon}
+              />
               <Text style={styles.macroValue}>
-                {macronutrients?.fat || "N/A"}
+                {macronutrients?.fat || "0g"}
               </Text>
+              <Text style={styles.macroLabel}>Fat</Text>
             </View>
           </View>
 
@@ -93,11 +137,14 @@ export default function NutritionDisplay({
           {otherNutrients?.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Detailed Nutrients</Text>
-              {otherNutrients.map((item, index) => (
-                <Text key={index} style={styles.listItem}>
-                  • {item}
-                </Text>
-              ))}
+              <View style={styles.nutrientList}>
+                {otherNutrients.map((item, index) => (
+                  <View key={index} style={styles.listItemContainer}>
+                    <View style={styles.bulletPoint} />
+                    <Text style={styles.listItem}>{item}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
 
@@ -118,9 +165,12 @@ export default function NutritionDisplay({
                   getHealthAdviceStyle(healthAdvice.suitability),
                 ]}
               >
-                <Text style={[styles.sectionTitle, styles.healthAdviceTitle]}>
-                  {getHealthAdviceIcon(healthAdvice.suitability)} Health Advice
-                </Text>
+                <View style={styles.healthAdviceHeader}>
+                  {getHealthAdviceIcon(healthAdvice.suitability)}
+                  <Text style={[styles.sectionTitle, styles.healthAdviceTitle]}>
+                    Health Insights
+                  </Text>
+                </View>
                 <Text style={styles.healthAdviceText}>
                   {healthAdvice.reason}
                 </Text>
@@ -129,7 +179,6 @@ export default function NutritionDisplay({
           )}
         </ScrollView>
 
-        {/* This button needs to be above the App.js nav bar */}
         <TouchableOpacity style={styles.closeButton} onPress={onClose}>
           <Text style={styles.closeButtonText}>{closeButtonLabel}</Text>
         </TouchableOpacity>
@@ -145,166 +194,197 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.75)", // Slightly darker overlay
-    justifyContent: "flex-end", // Align content to the bottom
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "flex-end",
   },
   container: {
-    backgroundColor: "#f0f4f8", // Background for the content sheet
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "85%", // Limit height
-    // *** ADD PADDING BOTTOM HERE ***
-    // Estimate the height of your bottom nav bar. Let's try 70.
-    paddingBottom: 70, // This pushes everything inside the SafeAreaView up
+    backgroundColor: "#F9FAFB", // Off-white clean background
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    maxHeight: "85%",
+    paddingBottom: 70, // Leaves room for Bottom Navigation Bar
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  dragPill: {
+    width: 40,
+    height: 5,
+    backgroundColor: "#D1D5DB",
+    borderRadius: 5,
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 4,
   },
   scrollContent: {
-    padding: 24, // Padding for the scrollable content itself
-    // paddingBottom: 40 // Remove this if paddingBottom in container is enough
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   productName: {
-    fontSize: 26, // Slightly smaller
-    fontWeight: "bold",
-    textAlign: "center",
-    color: "#1f2937",
-    marginBottom: 4, // Added margin bottom
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 4,
+    letterSpacing: -0.5,
   },
   summary: {
-    fontSize: 16,
-    color: "#4b5563",
-    textAlign: "center",
-    marginTop: 4, // Reduced margin top
-    marginBottom: 20, // Reduced margin bottom
+    fontSize: 15,
+    color: "#6B7280",
+    fontWeight: "500",
+    marginBottom: 24,
   },
   macroGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 12, // Reduced margin
+    marginBottom: 16,
   },
   macroCard: {
     width: "48%",
-    padding: 14, // Slightly reduced padding
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 20,
+    alignItems: "flex-start",
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  macroLabel: {
-    fontSize: 13, // Smaller label
-    fontWeight: "600",
-    color: "#4b5563",
+  macroIcon: {
+    marginBottom: 8,
   },
   macroValue: {
-    fontSize: 22, // Smaller value
-    fontWeight: "bold",
-    color: "#1f2937",
-    marginTop: 4,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  macroLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#9CA3AF",
   },
   section: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    shadowColor: "#000", // Optional: Add subtle shadow to sections
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
     elevation: 1,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#374151",
-    marginBottom: 8,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  nutrientList: {
+    marginTop: 4,
+  },
+  listItemContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  bulletPoint: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
+    marginRight: 12,
   },
   listItem: {
-    fontSize: 15, // Slightly smaller
-    color: "#4b5563",
-    marginBottom: 5, // Increased spacing
-    lineHeight: 22, // Improve readability
+    fontSize: 15,
+    color: "#4B5563",
+    fontWeight: "500",
   },
   additionalInfoText: {
     fontSize: 15,
-    color: "#4b5563",
+    color: "#4B5563",
     lineHeight: 22,
   },
-  closeButton: {
-    backgroundColor: "#007AFF",
-    padding: 16, // Slightly smaller padding
-    // Use margin Horizontal for spacing from edges, marginBottom handled by container paddingBottom
-    marginHorizontal: 24,
-    marginTop: 12, // Space above the button
-    // marginBottom: 24 // Let container padding handle this
-    borderRadius: 25, // Rounded corners
-    alignItems: "center",
-    shadowColor: "#000", // Add shadow to button
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
-  },
-  closeButtonText: {
-    color: "white",
-    fontSize: 16, // Smaller text
-    fontWeight: "bold",
-  },
-  errorTitle: {
-    fontSize: 22, // Smaller error title
-    fontWeight: "bold",
-    textAlign: "center",
-    color: "#1f2937",
-    marginTop: 40,
-    marginBottom: 10, // Added margin
-  },
-  errorText: {
-    fontSize: 15, // Smaller error text
-    color: "#4b5563",
-    textAlign: "center",
-    marginVertical: 15, // Adjusted margin
-    paddingHorizontal: 30,
-    lineHeight: 22, // Improve readability
-  },
-  // --- Health Advice Styles --- (Keep these as they were)
   healthAdviceSectionBase: {
     padding: 0,
-    backgroundColor: "white",
-    marginTop: 16,
-    borderRadius: 12,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
   },
   healthAdviceContent: {
-    padding: 16,
-    borderLeftWidth: 5,
+    padding: 20,
+    borderLeftWidth: 6,
+  },
+  healthAdviceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
   },
   healthAdviceTitle: {
-    color: "#1f2937", // Example color
-    // Inherits sectionTitle styles otherwise
+    marginBottom: 0,
+    marginLeft: 8,
   },
   healthAdviceText: {
     fontSize: 15,
-    color: "#4b5563",
+    color: "#4B5563",
     lineHeight: 22,
+    marginTop: 4,
   },
   healthAdviceGood: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#22c55e",
+    backgroundColor: "#F0FDF4",
+    borderLeftColor: "#10B981",
   },
   healthAdviceBad: {
-    backgroundColor: "#fef2f2",
-    borderColor: "#ef4444",
+    backgroundColor: "#FEF2F2",
+    borderLeftColor: "#EF4444",
   },
   healthAdviceNeutral: {
-    backgroundColor: "#fffbeb",
-    borderColor: "#f59e0b",
+    backgroundColor: "#FFFBEB",
+    borderLeftColor: "#F59E0B",
   },
-  adviceLoadingContainer: {
-    flexDirection: "row",
+  closeButton: {
+    backgroundColor: "#111827", // Premium Dark button
+    paddingVertical: 18,
+    marginHorizontal: 24,
+    marginTop: 10,
+    borderRadius: 16,
     alignItems: "center",
-    padding: 16,
-    backgroundColor: "#f3f4f6",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  adviceLoadingText: {
-    marginLeft: 10,
+  closeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  errorIconContainer: {
+    alignItems: "center",
+    marginTop: 30,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    textAlign: "center",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  errorText: {
     fontSize: 15,
-    color: "#6b7280",
+    color: "#6B7280",
+    textAlign: "center",
+    marginHorizontal: 30,
+    marginBottom: 30,
+    lineHeight: 22,
   },
 });

@@ -1,46 +1,44 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path"); // <-- Import path
-const fs = require("fs"); // <-- Import fs
+const path = require("path");
+const fs = require("fs");
 const {
   searchFood,
   getFoodDetails,
   scanFoodFromImage,
   scanFoodByText,
   manualFoodEntry,
+  scanBarcode, // <-- ADDED: Imported the new scanBarcode function
 } = require("../controllers/foodController");
 const { authMiddleware } = require("../middleware/auth");
-const Food = require("../models/Food"); // <-- Import Food model
-const User = require("../models/User"); // <-- Import User model
-const geminiService = require("../services/geminiService.js"); // <-- Import geminiService
+const Food = require("../models/Food");
+const User = require("../models/User");
+const geminiService = require("../services/geminiService.js");
 
 const router = express.Router();
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, "..", "..", "uploads"); // Correct path relative to src/routes
-    // Ensure the directory exists
+    const uploadPath = path.join(__dirname, "..", "..", "uploads");
     fs.mkdirSync(uploadPath, { recursive: true });
-    cb(null, uploadPath); // Save files to the 'uploads' directory at the backend root
+    cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    // Generate a unique filename: timestamp + sanitized original name
     const uniqueSuffix = Date.now();
-    const safeOriginalName = file.originalname.replace(/[^a-zA-Z0-9.]/g, "_"); // Sanitize
+    const safeOriginalName = file.originalname.replace(/[^a-zA-Z0-9.]/g, "_");
     const finalFilename = `${uniqueSuffix}-${safeOriginalName}`;
     cb(null, finalFilename);
   },
 });
 
-// Configure multer for file uploads
 const upload = multer({
-  storage: storage, // Use the diskStorage config
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith("image/")) {
       cb(null, true);
     } else {
-      cb(new Error("Only image files are allowed"), false); // Pass false for rejection
+      cb(new Error("Only image files are allowed"), false);
     }
   },
 });
@@ -49,7 +47,7 @@ const upload = multer({
 router.get("/search", searchFood);
 router.get("/:foodId", getFoodDetails);
 
-// Protected routes
+// Protected routes (Everything below this line automatically requires authentication)
 router.use(authMiddleware);
 
 // Image-based scanning
@@ -60,5 +58,8 @@ router.post("/scan", scanFoodByText);
 
 // Manual entry
 router.post("/manual-entry", manualFoodEntry);
+
+// Barcode scanning
+router.post("/scan-barcode", scanBarcode); // <-- FIXED: Removed "auth" and "foodController."
 
 module.exports = router;
