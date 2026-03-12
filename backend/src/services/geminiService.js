@@ -22,14 +22,25 @@ const parseGeminiResponse = (text) => {
 };
 
 // Get food nutrition info using Gemini Vision
-exports.getFoodNutritionFromImage = async (imageBuffer, mimeType) => {
+// Get food nutrition AND Health Advice in one single lightning-fast shot
+exports.getFoodNutritionFromImage = async (imageBuffer, mimeType, user) => {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro",
+      generationConfig: { responseMimeType: "application/json" },
+    });
 
     const base64Image = imageBuffer.toString("base64");
 
+    // Format user profile
+    const userProfile = user
+      ? `Allergies: ${(user.allergies || []).join(", ") || "None"}. Health Conditions: ${(user.healthConditions || []).join(", ") || "None"}.`
+      : "None";
+
     const prompt = `Analyze this food image and provide nutritional information. 
-    Return ONLY a JSON object with this exact structure (no markdown, no extra text):
+    Also, evaluate if this food is generally "good", "bad", or "neutral" for a user with this health profile: ${userProfile}.
+    
+    Return ONLY a JSON object with this exact structure:
     {
       "foodName": "name of the food",
       "estimatedQuantityGrams": 100,
@@ -43,27 +54,20 @@ exports.getFoodNutritionFromImage = async (imageBuffer, mimeType) => {
       "sodiumMg": number,
       "allergens": ["allergen1", "allergen2"],
       "ingredients": ["ingredient1", "ingredient2"],
-      "confidence": 0.95
-    }
-    
-    Be precise with nutritional values. If uncertain, make reasonable estimates based on typical values for that food.`;
+      "confidence": 0.95,
+      "suitability": "good" | "bad" | "neutral",
+      "reason": "1 short sentence explaining why it is good/bad/neutral for the user."
+    }`;
 
     const response = await model.generateContent([
-      {
-        inlineData: {
-          data: base64Image,
-          mimeType: mimeType,
-        },
-      },
+      { inlineData: { data: base64Image, mimeType: mimeType } },
       prompt,
     ]);
 
     const responseText = response.response.text();
     const nutritionData = parseGeminiResponse(responseText);
 
-    if (!nutritionData) {
-      throw new Error("Failed to parse Gemini response");
-    }
+    if (!nutritionData) throw new Error("Failed to parse Gemini response");
 
     return nutritionData;
   } catch (err) {
@@ -345,7 +349,9 @@ exports.getHealthAdvice = async (food, user) => {
 
   try {
     // Use a model suitable for text analysis (e.g., gemini-1.5-flash or gemini-pro)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); // Or "gemini-pro"
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-pro",
+    }); // Or "gemini-pro"
     // const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     // Construct the prompt
     const prompt = `

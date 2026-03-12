@@ -11,13 +11,13 @@ import {
   Platform,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker"; // 🚨 NEW IMPORT
 import { Feather } from "@expo/vector-icons";
 import apiService from "../services/api";
 import PermissionsNotice from "../components/PermissionsNotice";
 import LoadingOverlay from "../components/LoadingOverlay";
 import NutritionDisplay from "../components/NutritionDisplay";
 
-// <-- Added onNavigate prop here
 export default function ScannerScreen({ onNavigate }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanMode, setScanMode] = useState("image");
@@ -32,13 +32,14 @@ export default function ScannerScreen({ onNavigate }) {
   const [isBarcodeReady, setIsBarcodeReady] = useState(false);
   const cameraRef = useRef(null);
 
+  // --- LIVE CAMERA CAPTURE ---
   const handleCaptureTrigger = async () => {
     if (scanMode === "image") {
       if (!cameraRef.current) return;
       setError(null);
       try {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.7,
+          quality: 0.3, // Compressed for speed
         });
         setCapturedPhoto(photo);
         setShowMealTypeModal(true);
@@ -49,6 +50,38 @@ export default function ScannerScreen({ onNavigate }) {
       setIsBarcodeReady(true);
       setError(null);
       setTimeout(() => setIsBarcodeReady(false), 3000);
+    }
+  };
+
+  // 🚨 NEW: GALLERY PICKER FUNCTION 🚨
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission needed",
+        "We need camera roll permissions to upload your food photos!",
+      );
+      return;
+    }
+
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true, // Lets the user crop the photo
+        aspect: [4, 3],
+        quality: 0.3, // Compressed for speed!
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setScanMode("image"); // Ensure we are in image mode
+        setError(null);
+        // Save the picked image uri in the exact format the camera uses
+        setCapturedPhoto({ uri: result.assets[0].uri });
+        setShowMealTypeModal(true);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to pick image from gallery.");
     }
   };
 
@@ -142,7 +175,6 @@ export default function ScannerScreen({ onNavigate }) {
       <View style={styles.overlay}>
         {/* Top Header */}
         <View style={styles.header}>
-          {/* <-- Wired up the Back button right here! */}
           <TouchableOpacity
             style={styles.iconCircle}
             onPress={() => onNavigate("dashboard")}
@@ -221,7 +253,8 @@ export default function ScannerScreen({ onNavigate }) {
             <Text style={styles.errorText}>{error}</Text>
           )}
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.sideBtn}>
+            {/* 🚨 UPDATED GALLERY BUTTON 🚨 */}
+            <TouchableOpacity style={styles.sideBtn} onPress={handlePickImage}>
               <Feather name="image" size={24} color="#FFFFFF" />
             </TouchableOpacity>
 
@@ -250,6 +283,17 @@ export default function ScannerScreen({ onNavigate }) {
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowMealTypeModal(false);
+                setCapturedPhoto(null);
+                setCapturedBarcode(null);
+              }}
+            >
+              <Feather name="x" size={24} color="#6B7280" />
+            </TouchableOpacity>
+
             <Text style={styles.modalTitle}>Details</Text>
             <View style={styles.mealTypeButtons}>
               {["breakfast", "lunch", "dinner", "snack"].map((type) => (
@@ -459,6 +503,15 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     padding: 30,
   },
+
+  modalCloseButton: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    zIndex: 10,
+    padding: 5,
+  },
+
   modalTitle: {
     fontSize: 20,
     fontWeight: "800",

@@ -65,46 +65,41 @@ exports.getFoodDetails = async (req, res) => {
 };
 
 // Scan food from image using Gemini Vision
+// Scan food from image using Gemini Vision (SINGLE-SHOT OPTIMIZED)
 exports.scanFoodFromImage = async (req, res) => {
-  // Define path early for potential cleanup, now points to final location
   const finalImagePath = req.file?.path;
 
   try {
     const { mealType, quantityGrams } = req.body;
     const userId = req.userId;
 
-    if (!req.file) {
+    if (!req.file || !mealType || !quantityGrams) {
+      if (finalImagePath && fs.existsSync(finalImagePath))
+        fs.unlinkSync(finalImagePath);
       return res
         .status(400)
-        .json({ success: false, message: "Image file is required" });
+        .json({ success: false, message: "Missing required fields or image" });
     }
 
-    // *** Get filename from req.file (set by multer.diskStorage) ***
-    const imageFileName = req.file.filename; // <-- Use this
+    const imageFileName = req.file.filename;
 
-    if (!mealType || !quantityGrams) {
-      // Clean up the SAVED file if validation fails
-      if (finalImagePath && fs.existsSync(finalImagePath)) {
-        try {
-          fs.unlinkSync(finalImagePath);
-        } catch (e) {
-          console.error("Error cleaning up image on validation fail:", e);
-        }
-      }
-      return res.status(400).json({
-        success: false,
-        message: "mealType and quantityGrams are required",
-      });
+    // 🚨 1. FETCH THE USER FIRST so we can send their profile to the AI
+    const user = await User.findByPk(userId);
+    if (!user) {
+      if (fs.existsSync(finalImagePath)) fs.unlinkSync(finalImagePath);
+      return res
+        .status(401)
+        .json({ success: false, message: "User not found" });
     }
 
-    // Read image file using the final path
     const imageBuffer = fs.readFileSync(finalImagePath);
     const mimeType = req.file.mimetype;
 
-    // Get nutrition data from Gemini Vision
+    // 🚨 2. SINGLE API CALL: Pass the user into the scanner!
     const nutritionData = await geminiService.getFoodNutritionFromImage(
       imageBuffer,
       mimeType,
+      user,
     );
 
     if (
@@ -112,44 +107,26 @@ exports.scanFoodFromImage = async (req, res) => {
       !nutritionData.foodName ||
       nutritionData.foodName.toLowerCase().includes("not found")
     ) {
-      console.log("Gemini failed to detect food from image.");
-      // Clean up the saved image file as it's not needed
-      if (fs.existsSync(finalImagePath)) fs.unlinkSync(finalImagePath);
-      // Return a specific failure message
-      return res.status(400).json({
-        success: false,
-        message:
-          "Could not detect a food item in the image. Please try again with a clearer picture.",
-        data: { scan: null }, // Explicitly null data
-      });
-    }
-
-    // Get user for allergen checking
-    const user = await User.findByPk(userId);
-    if (!user) {
-      // Clean up saved file if user not found
       if (fs.existsSync(finalImagePath)) fs.unlinkSync(finalImagePath);
       return res
-        .status(401)
-        .json({ success: false, message: "User not found" });
+        .status(400)
+        .json({
+          success: false,
+          message: "Could not detect food.",
+          data: { scan: null },
+        });
     }
 
     // Create or fetch food
     const food = await geminiService.createOrFetchFood(nutritionData);
-
-    // *** REMOVED manual rename logic and redundant imageFileName declaration ***
-
-    // Construct imageUrl using the filename from req.file
-    const imageUrl = `/uploads/${imageFileName}`; // Relative URL path for serving
-
-    // Detect allergens
+    const imageUrl = `/uploads/${imageFileName}`;
     const allergenDetection = await geminiService.detectAllergens(
       food.id,
       user.allergies,
     );
 
-    // Get health advice
-    const healthAdvice = await geminiService.getHealthAdvice(food, user);
+    // 🚨 3. WE DELETED THE SECOND API CALL (`getHealthAdvice`).
+    // We just read the data directly from `nutritionData`!
 
     // Create scan record
     const scan = await FoodScan.create({
@@ -158,51 +135,36 @@ exports.scanFoodFromImage = async (req, res) => {
       quantityGrams: quantityGrams || nutritionData.estimatedQuantityGrams,
       mealType,
       scanDate: new Date().toISOString().split("T")[0],
-      scannedAt: new Date(), // <-- Added scannedAt for better sorting
+      scannedAt: new Date(),
       detectedAllergens: allergenDetection.detectedAllergens,
       allergenWarning: allergenDetection.hasAllergen,
       confidenceScore: nutritionData.confidence || 0.9,
       imageUrl: imageUrl,
-      healthSuitability: healthAdvice?.suitability || null,
-      healthReason: healthAdvice?.reason || null,
+      healthSuitability: nutritionData.suitability || "neutral", // <-- From single shot!
+      healthReason: nutritionData.reason || "Analysis complete.", // <-- From single shot!
     });
 
-    // Calculate nutrition for this quantity
     const nutrition = geminiService.calculateNutritionForQuantity(
       food,
-      scan.quantityGrams, // Use the actual saved quantity
+      scan.quantityGrams,
     );
-
-    // *** No need to manually delete finalImagePath here unless scan creation fails ***
 
     res.status(201).json({
       success: true,
       message: "Food scanned successfully",
-      data: {
-        scan: {
-          ...scan.toJSON(),
-          food: food.toJSON(),
-          nutrition: nutrition,
-          // healthAdvice is now part of scan.toJSON()
-        },
-      },
+      data: { scan: { ...scan.toJSON(), food: food.toJSON(), nutrition } },
     });
   } catch (err) {
-    // Clean up the SAVED file on error if it exists
-    if (finalImagePath && fs.existsSync(finalImagePath)) {
-      try {
-        fs.unlinkSync(finalImagePath);
-        console.log("Cleaned up saved image file after error:", finalImagePath);
-      } catch (cleanupErr) {
-        console.error("Error cleaning up image file:", cleanupErr);
-      }
-    }
+    if (finalImagePath && fs.existsSync(finalImagePath))
+      fs.unlinkSync(finalImagePath);
     console.error("Scan food from image error:", err);
-    res.status(500).json({
-      success: false,
-      message: err.message || "Failed to scan food",
-      error: err.toString(),
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: err.message || "Failed to scan food",
+        error: err.toString(),
+      });
   }
 };
 
@@ -288,13 +250,11 @@ exports.scanFoodByText = async (req, res) => {
     });
   } catch (err) {
     console.error("Scan food by text error:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to scan food",
-        error: err.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to scan food",
+      error: err.message,
+    });
   }
 };
 
