@@ -7,8 +7,8 @@ import {
   Alert,
   Modal,
   TextInput,
-  Platform,
   KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Feather } from "@expo/vector-icons";
@@ -17,50 +17,42 @@ import PermissionsNotice from "../components/PermissionsNotice";
 import LoadingOverlay from "../components/LoadingOverlay";
 import NutritionDisplay from "../components/NutritionDisplay";
 
-export default function ScannerScreen() {
+// <-- Added onNavigate prop here
+export default function ScannerScreen({ onNavigate }) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanMode, setScanMode] = useState("image"); // "image" or "barcode"
-
+  const [scanMode, setScanMode] = useState("image");
   const [scannedData, setScannedData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-
   const [showMealTypeModal, setShowMealTypeModal] = useState(false);
   const [mealType, setMealType] = useState("lunch");
   const [quantityGrams, setQuantityGrams] = useState("100");
-
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [capturedBarcode, setCapturedBarcode] = useState(null);
-
-  // NEW: State to control manual barcode scanning
   const [isBarcodeReady, setIsBarcodeReady] = useState(false);
   const cameraRef = useRef(null);
 
-  const handleCaptureImage = async () => {
-    if (!cameraRef.current) return;
-    setError(null);
-    try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
-      setCapturedPhoto(photo);
-      setShowMealTypeModal(true);
-    } catch (err) {
-      Alert.alert("Error", "Failed to capture photo.");
+  const handleCaptureTrigger = async () => {
+    if (scanMode === "image") {
+      if (!cameraRef.current) return;
+      setError(null);
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.7,
+        });
+        setCapturedPhoto(photo);
+        setShowMealTypeModal(true);
+      } catch (err) {
+        Alert.alert("Error", "Failed to capture photo.");
+      }
+    } else {
+      setIsBarcodeReady(true);
+      setError(null);
+      setTimeout(() => setIsBarcodeReady(false), 3000);
     }
   };
 
-  // NEW: Manual trigger for the barcode
-  const triggerBarcodeScan = () => {
-    setIsBarcodeReady(true);
-    setError(null);
-
-    // Auto-reset the button after 3 seconds if no barcode is found
-    setTimeout(() => {
-      setIsBarcodeReady(false);
-    }, 3000);
-  };
-
-  const handleBarcodeScanned = ({ type, data }) => {
-    // If the user hasn't pressed the button, completely ignore the barcode!
+  const handleBarcodeScanned = ({ data }) => {
     if (
       scanMode !== "barcode" ||
       !isBarcodeReady ||
@@ -69,8 +61,6 @@ export default function ScannerScreen() {
       scannedData
     )
       return;
-
-    // The moment we get a scan, turn the scanner off so it doesn't fire twice
     setIsBarcodeReady(false);
     setError(null);
     setCapturedBarcode(data);
@@ -78,92 +68,57 @@ export default function ScannerScreen() {
   };
 
   const handleSubmitScan = async () => {
-    if (!quantityGrams || !mealType) {
-      Alert.alert("Error", "Missing scan details.");
-      return;
-    }
-
     setShowMealTypeModal(false);
     setIsLoading(true);
     setError(null);
     setScannedData(null);
-
     try {
-      let response;
-      if (scanMode === "image") {
-        response = await apiService.scanFoodByImage(
-          capturedPhoto.uri,
-          mealType,
-          parseFloat(quantityGrams),
-        );
-      } else {
-        response = await apiService.scanBarcode(
-          capturedBarcode,
-          mealType,
-          parseFloat(quantityGrams),
-        );
-      }
+      let response =
+        scanMode === "image"
+          ? await apiService.scanFoodByImage(
+              capturedPhoto.uri,
+              mealType,
+              parseFloat(quantityGrams),
+            )
+          : await apiService.scanBarcode(
+              capturedBarcode,
+              mealType,
+              parseFloat(quantityGrams),
+            );
 
       if (response.success && response.data?.scan) {
-        const scanData = response.data.scan;
-        const foodData = scanData.food;
-        const nutritionData = scanData.nutrition;
-
-        const healthAdviceObject =
-          scanData.healthSuitability && scanData.healthReason
-            ? {
-                suitability: scanData.healthSuitability,
-                reason: scanData.healthReason,
-              }
-            : { suitability: "neutral", reason: "Analysis not available." };
-
-        // Helper function to safely display 0 instead of N/A
+        const { food, nutrition, healthSuitability, healthReason } =
+          response.data.scan;
         const getVal = (val) =>
           val !== undefined && val !== null ? val : "N/A";
 
-        const transformedData = {
-          productName: foodData.name || "Unknown Food",
-          summary: `${getVal(nutritionData.calories)} calories per ${scanData.quantityGrams || quantityGrams}g serving`,
-          imageUrl: scanData.imageUrl
-            ? scanData.imageUrl.startsWith("http")
-              ? scanData.imageUrl
-              : `${process.env.EXPO_PUBLIC_API_URL.replace("/api", "")}${scanData.imageUrl}`
-            : null,
+        setScannedData({
+          productName: food.name || "Unknown Food",
+          summary: `${getVal(nutrition.calories)} kcal per ${quantityGrams}g`,
+          imageUrl: response.data.scan.imageUrl || null,
           macronutrients: {
-            calories: `${getVal(nutritionData.calories)} kcal`,
-            protein: `${getVal(nutritionData.protein)}g`,
-            carbohydrates: `${getVal(nutritionData.carbs)}g`,
-            fat: `${getVal(nutritionData.fats)}g`,
+            calories: `${getVal(nutrition.calories)} kcal`,
+            protein: `${getVal(nutrition.protein)}g`,
+            carbohydrates: `${getVal(nutrition.carbs)}g`,
+            fat: `${getVal(nutrition.fats)}g`,
           },
           otherNutrients: [
-            `Fiber: ${getVal(nutritionData.fiber)}g`,
-            `Sugar: ${getVal(nutritionData.sugar)}g`,
-            `Sodium: ${getVal(nutritionData.sodium)}mg`,
-            ...(foodData.allergens && foodData.allergens.length > 0
-              ? [`Listed Allergens: ${foodData.allergens.join(", ")}`]
-              : []),
+            `Fiber: ${getVal(nutrition.fiber)}g`,
+            `Sugar: ${getVal(nutrition.sugar)}g`,
           ],
-          additionalInfo: `Category: ${foodData.category || "N/A"}`,
-          healthAdvice: healthAdviceObject,
-        };
-
-        setScannedData(transformedData);
-      } else {
-        setError(response.message || "Analysis failed.");
-      }
+          healthAdvice: {
+            suitability: healthSuitability || "neutral",
+            reason: healthReason || "",
+          },
+        });
+      } else setError(response.message || "Analysis failed.");
     } catch (err) {
-      setError(err.message || "An error occurred during scanning.");
+      setError(err.message || "Error occurred.");
     } finally {
       setIsLoading(false);
       setCapturedPhoto(null);
       setCapturedBarcode(null);
     }
-  };
-
-  const closeNutritionDisplay = () => {
-    setScannedData(null);
-    setError(null);
-    setCapturedBarcode(null);
   };
 
   if (!permission) return <View />;
@@ -185,137 +140,117 @@ export default function ScannerScreen() {
       />
 
       <View style={styles.overlay}>
+        {/* Top Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>MacroMind</Text>
-
-          <View style={styles.toggleContainer}>
-            <TouchableOpacity
-              style={[
-                styles.toggleBtn,
-                scanMode === "image" && styles.toggleBtnActive,
-              ]}
-              onPress={() => setScanMode("image")}
-            >
-              <Feather
-                name="camera"
-                size={14}
-                color={scanMode === "image" ? "#111827" : "#FFFFFF"}
-              />
-              <Text
-                style={[
-                  styles.toggleText,
-                  scanMode === "image" && styles.toggleTextActive,
-                ]}
-              >
-                AI Vision
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.toggleBtn,
-                scanMode === "barcode" && styles.toggleBtnActive,
-              ]}
-              onPress={() => {
-                setScanMode("barcode");
-                setIsBarcodeReady(false); // Reset scanner state on switch
-              }}
-            >
-              <Feather
-                name="maximize"
-                size={14}
-                color={scanMode === "barcode" ? "#111827" : "#FFFFFF"}
-              />
-              <Text
-                style={[
-                  styles.toggleText,
-                  scanMode === "barcode" && styles.toggleTextActive,
-                ]}
-              >
-                Barcode
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {/* <-- Wired up the Back button right here! */}
+          <TouchableOpacity
+            style={styles.iconCircle}
+            onPress={() => onNavigate("dashboard")}
+          >
+            <Feather name="arrow-left" size={20} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>AI Scanner</Text>
+          <TouchableOpacity style={styles.iconCircle}>
+            <Feather name="more-vertical" size={20} color="#111827" />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.bottomContainer}>
+        {/* Floating Toggle Menu */}
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.toggleBtn,
+              scanMode === "image" && styles.toggleBtnActive,
+            ]}
+            onPress={() => setScanMode("image")}
+          >
+            <Feather
+              name="aperture"
+              size={20}
+              color={scanMode === "image" ? "#111827" : "#FFFFFF"}
+            />
+            <Text
+              style={[
+                styles.toggleText,
+                scanMode === "image" && styles.toggleTextActive,
+              ]}
+            >
+              Scan Food
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.toggleBtn,
+              scanMode === "barcode" && styles.toggleBtnActive,
+            ]}
+            onPress={() => {
+              setScanMode("barcode");
+              setIsBarcodeReady(false);
+            }}
+          >
+            <Feather
+              name="maximize"
+              size={20}
+              color={scanMode === "barcode" ? "#111827" : "#FFFFFF"}
+            />
+            <Text
+              style={[
+                styles.toggleText,
+                scanMode === "barcode" && styles.toggleTextActive,
+              ]}
+            >
+              Barcode
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Center Viewfinder */}
+        <View style={styles.viewfinderContainer}>
+          <View style={[styles.corner, styles.tl]} />
+          <View style={[styles.corner, styles.tr]} />
+          <View style={[styles.corner, styles.bl]} />
+          <View style={[styles.corner, styles.br]} />
+          {scanMode === "barcode" && isBarcodeReady && (
+            <View style={styles.scanLine} />
+          )}
+        </View>
+
+        {/* Bottom Controls */}
+        <View style={styles.bottomControls}>
           {error && !scannedData && (
             <Text style={styles.errorText}>{error}</Text>
           )}
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.sideBtn}>
+              <Feather name="image" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
 
-          {/* AI Vision Button */}
-          {!scannedData && scanMode === "image" && (
             <TouchableOpacity
               style={[
-                styles.scanButton,
-                isLoading && styles.scanButtonDisabled,
+                styles.shutterBtnOuter,
+                (isLoading || (scanMode === "barcode" && isBarcodeReady)) &&
+                  styles.shutterBtnDisabled,
               ]}
-              onPress={handleCaptureImage}
-              disabled={isLoading}
+              onPress={handleCaptureTrigger}
+              disabled={isLoading || (scanMode === "barcode" && isBarcodeReady)}
             >
-              <Feather
-                name="aperture"
-                size={20}
-                color={isLoading ? "#9CA3AF" : "#111827"}
-                style={styles.btnIcon}
-              />
-              <Text style={styles.scanButtonText}>
-                {isLoading ? "PROCESSING..." : "SNAP FOOD"}
-              </Text>
+              <View style={styles.shutterBtnInner} />
             </TouchableOpacity>
-          )}
 
-          {/* Manual Barcode Button */}
-          {!scannedData && scanMode === "barcode" && (
-            <View style={{ alignItems: "center" }}>
-              <View style={styles.barcodeTarget}>
-                <Feather
-                  name="maximize"
-                  size={48}
-                  color="rgba(255,255,255,0.5)"
-                />
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.scanButton,
-                  (isLoading || isBarcodeReady) && styles.scanButtonDisabled,
-                ]}
-                onPress={triggerBarcodeScan}
-                disabled={isLoading || isBarcodeReady}
-              >
-                <Feather
-                  name="maximize"
-                  size={20}
-                  color={isLoading || isBarcodeReady ? "#9CA3AF" : "#111827"}
-                  style={styles.btnIcon}
-                />
-                <Text style={styles.scanButtonText}>
-                  {isBarcodeReady ? "FOCUSING..." : "SNAP BARCODE"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            <TouchableOpacity style={styles.sideBtn}>
+              <Feather name="zap-off" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
-      <Modal
-        visible={showMealTypeModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          setShowMealTypeModal(false);
-          setCapturedPhoto(null);
-          setCapturedBarcode(null);
-        }}
-      >
+      <Modal visible={showMealTypeModal} transparent animationType="slide">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Scan Details</Text>
-
-            <Text style={styles.label}>Meal Type</Text>
+            <Text style={styles.modalTitle}>Details</Text>
             <View style={styles.mealTypeButtons}>
               {["breakfast", "lunch", "dinner", "snack"].map((type) => (
                 <TouchableOpacity
@@ -332,57 +267,34 @@ export default function ScannerScreen() {
                       mealType === type && styles.mealTypeButtonTextActive,
                     ]}
                   >
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                    {type}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-
-            <Text style={styles.label}>Estimated Quantity (grams)</Text>
             <TextInput
               style={styles.input}
               value={quantityGrams}
-              onChangeText={(text) =>
-                setQuantityGrams(text.replace(/[^0-9]/g, ""))
-              }
+              onChangeText={setQuantityGrams}
               keyboardType="numeric"
-              placeholder="e.g., 100"
-              placeholderTextColor="#9CA3AF"
+              placeholder="Weight (g)"
             />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => {
-                  setShowMealTypeModal(false);
-                  setCapturedPhoto(null);
-                  setCapturedBarcode(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.confirmButton,
-                  !quantityGrams && styles.confirmButtonDisabled,
-                ]}
-                onPress={handleSubmitScan}
-                disabled={!quantityGrams}
-              >
-                <Text style={styles.confirmButtonText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={handleSubmitScan}
+            >
+              <Text style={styles.confirmButtonText}>Analyze Food</Text>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
       {isLoading && <LoadingOverlay />}
-
       {scannedData && (
         <NutritionDisplay
           data={scannedData}
-          onClose={closeNutritionDisplay}
-          closeButtonLabel="SCAN ANOTHER"
+          onClose={() => setScannedData(null)}
+          closeButtonLabel="DONE"
         />
       )}
     </View>
@@ -399,153 +311,194 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: "space-between",
-    paddingTop: 60,
-    paddingBottom: 60,
+    paddingTop: 50,
+    paddingBottom: 40,
+  },
+
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
   },
-  header: { alignItems: "center" },
-  title: {
-    fontSize: 22,
-    fontWeight: "800",
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
     color: "#FFFFFF",
-    letterSpacing: 0.5,
-    textShadowColor: "rgba(0, 0, 0, 0.75)",
-    textShadowOffset: { width: 0, height: 2 },
+    textShadowColor: "rgba(0,0,0,0.5)",
     textShadowRadius: 4,
   },
+
   toggleContainer: {
     flexDirection: "row",
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 24,
-    marginTop: 16,
-    padding: 4,
-    backdropFilter: "blur(10px)",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 20,
   },
   toggleBtn: {
-    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    gap: 8,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    width: 90,
   },
-  toggleBtnActive: { backgroundColor: "#FFFFFF" },
-  toggleText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  toggleBtnActive: { backgroundColor: "#D4EB9B" },
+  toggleText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 8,
+  },
   toggleTextActive: { color: "#111827" },
-  bottomContainer: { alignItems: "center", paddingBottom: 20 },
-  barcodeTarget: {
-    marginBottom: 40,
-    width: 250,
-    height: 150,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.3)",
-    borderRadius: 20,
+
+  viewfinderContainer: {
+    alignSelf: "center",
+    width: 280,
+    height: 280,
+    justifyContent: "center",
+  },
+  corner: {
+    position: "absolute",
+    width: 40,
+    height: 40,
+    borderColor: "#FFFFFF",
+    borderWidth: 4,
+  },
+  tl: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 20,
+  },
+  tr: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 20,
+  },
+  bl: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 20,
+  },
+  br: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 20,
+  },
+  scanLine: {
+    width: "100%",
+    height: 2,
+    backgroundColor: "#EF4444",
+    shadowColor: "#EF4444",
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+
+  bottomControls: { paddingHorizontal: 40 },
+  errorText: {
+    color: "#FFF",
+    backgroundColor: "#EF4444",
+    padding: 10,
+    borderRadius: 10,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sideBtn: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.1)",
   },
-  scanButton: {
-    flexDirection: "row",
+  shutterBtnOuter: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: "#FFFFFF",
+    justifyContent: "center",
     alignItems: "center",
+  },
+  shutterBtnInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: "#FFFFFF",
-    paddingVertical: 18,
-    paddingHorizontal: 36,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 8,
   },
-  scanButtonDisabled: { backgroundColor: "#E5E7EB" },
-  btnIcon: { marginRight: 8 },
-  scanButtonText: {
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  errorText: {
-    color: "#FFFFFF",
-    backgroundColor: "#EF4444",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-    textAlign: "center",
-    fontSize: 14,
-    fontWeight: "600",
-    maxWidth: "90%",
-  },
+  shutterBtnDisabled: { opacity: 0.5 },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 24,
-    width: "100%",
-    maxWidth: 360,
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 30,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
-    marginBottom: 24,
+    marginBottom: 20,
     textAlign: "center",
-    color: "#111827",
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 10,
-    color: "#374151",
   },
   mealTypeButtons: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 10,
     marginBottom: 20,
   },
   mealTypeButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    padding: 12,
     borderRadius: 12,
     backgroundColor: "#F3F4F6",
+    flex: 1,
     alignItems: "center",
   },
   mealTypeButtonActive: { backgroundColor: "#111827" },
-  mealTypeButtonText: { fontSize: 14, color: "#6B7280", fontWeight: "600" },
-  mealTypeButtonTextActive: { color: "#FFFFFF", fontWeight: "700" },
+  mealTypeButtonText: {
+    fontWeight: "600",
+    color: "#6B7280",
+    textTransform: "capitalize",
+  },
+  mealTypeButtonTextActive: { color: "#FFF" },
   input: {
     backgroundColor: "#F9FAFB",
     padding: 16,
     borderRadius: 12,
-    fontSize: 16,
-    marginBottom: 24,
-    color: "#111827",
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    marginBottom: 20,
+    fontSize: 16,
   },
-  modalButtons: { flexDirection: "row", gap: 12 },
-  cancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-  },
-  cancelButtonText: { fontSize: 15, fontWeight: "700", color: "#4B5563" },
   confirmButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: "#007AFF",
+    backgroundColor: "#D4EB9B",
+    padding: 18,
+    borderRadius: 16,
     alignItems: "center",
   },
-  confirmButtonDisabled: { backgroundColor: "#9CA3AF" },
-  confirmButtonText: { fontSize: 15, fontWeight: "700", color: "#FFFFFF" },
+  confirmButtonText: { color: "#111827", fontSize: 16, fontWeight: "800" },
 });

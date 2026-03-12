@@ -145,20 +145,49 @@ router.delete("/:itemId", async (req, res) => {
   }
 });
 
+// Get AI Meal Suggestions
 router.get("/suggestions", async (req, res) => {
   try {
     const userId = req.userId;
-    const suggestions = await geminiService.getMealSuggestions(userId);
-    res.status(200).json({ success: true, data: suggestions });
+    // 1. Get the raw array of recipe objects from Gemini
+    const suggestionsArray = await geminiService.getMealSuggestions(userId);
+
+    // 2. Format the Array into a beautiful, readable String for the mobile Alert box
+    let formattedText = "";
+
+    if (Array.isArray(suggestionsArray) && suggestionsArray.length > 0) {
+      // If the AI returned an error/info fallback message
+      if (
+        suggestionsArray[0].mealName === "Error" ||
+        suggestionsArray[0].mealName === "Info"
+      ) {
+        formattedText = suggestionsArray[0].description;
+      } else {
+        // Map through the recipes and format them beautifully
+        formattedText = suggestionsArray
+          .map(
+            (meal) =>
+              `🍲 ${meal.mealName} (${meal.estimatedPrepTime})\n${meal.description}\nUse: ${meal.primaryIngredients.join(", ")}`,
+          )
+          .join("\n\n");
+      }
+    } else {
+      formattedText =
+        "No ideas found. Try adding more ingredients to your pantry!";
+    }
+
+    // 3. Send it back EXACTLY how the frontend expects it: inside a 'suggestions' property
+    res.status(200).json({
+      success: true,
+      data: { suggestions: formattedText },
+    });
   } catch (err) {
     console.error("Get meal suggestions route error:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to get meal suggestions",
-        error: err.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Failed to get meal suggestions",
+      error: err.message,
+    });
   }
 });
 

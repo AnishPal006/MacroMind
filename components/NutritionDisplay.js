@@ -6,8 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Modal,
+  Platform,
 } from "react-native";
-import { Feather } from "@expo/vector-icons"; // <-- Added Vector Icons
+import { Feather } from "@expo/vector-icons";
 
 export default function NutritionDisplay({
   data,
@@ -16,23 +18,30 @@ export default function NutritionDisplay({
 }) {
   if (!data || !data.productName) {
     return (
-      <View style={styles.modalOverlay}>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.errorIconContainer}>
-            <Feather name="alert-circle" size={48} color="#EF4444" />
-          </View>
-          <Text style={styles.errorTitle}>Analysis Failed</Text>
-          <Text style={styles.errorText}>
-            The AI could not recognize a food product or its nutrition label.
-            Please try again with a clearer image.
-          </Text>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>
-              {closeButtonLabel === "CLOSE" ? "Try Again" : closeButtonLabel}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={true}
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalOverlay}>
+          <SafeAreaView style={styles.container}>
+            <View style={styles.errorIconContainer}>
+              <Feather name="alert-circle" size={48} color="#EF4444" />
+            </View>
+            <Text style={styles.errorTitle}>Analysis Failed</Text>
+            <Text style={styles.errorText}>
+              The AI could not recognize a food product or its nutrition label.
+              Please try again with a clearer image.
             </Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-      </View>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <Text style={styles.closeButtonText}>
+                {closeButtonLabel === "CLOSE" ? "Try Again" : closeButtonLabel}
+              </Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </View>
+      </Modal>
     );
   }
 
@@ -45,7 +54,6 @@ export default function NutritionDisplay({
     healthAdvice,
   } = data;
 
-  // Fully implemented helper functions
   const getHealthAdviceStyle = (suitability) => {
     switch (suitability?.toLowerCase()) {
       case "good":
@@ -69,140 +77,147 @@ export default function NutritionDisplay({
   };
 
   return (
-    <View style={styles.modalOverlay}>
-      <SafeAreaView style={styles.container}>
-        {/* Drag Indicator Pill */}
-        <View style={styles.dragPill} />
+    <Modal
+      transparent
+      animationType="slide"
+      visible={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <SafeAreaView style={styles.container}>
+          {/* Drag Indicator Pill */}
+          <View style={styles.dragPill} />
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.productName}>{productName}</Text>
-          <Text style={styles.summary}>{summary}</Text>
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.productName}>{productName}</Text>
+            <Text style={styles.summary}>{summary}</Text>
 
-          {/* --- Macronutrients Grid --- */}
-          <View style={styles.macroGrid}>
-            <View style={styles.macroCard}>
-              <Feather
-                name="zap"
-                size={20}
-                color="#F59E0B"
-                style={styles.macroIcon}
-              />
-              <Text style={styles.macroValue}>
-                {macronutrients?.calories || "0"}
-              </Text>
-              <Text style={styles.macroLabel}>Calories</Text>
-            </View>
-            <View style={styles.macroCard}>
-              <Feather
-                name="target"
-                size={20}
-                color="#10B981"
-                style={styles.macroIcon}
-              />
-              <Text style={styles.macroValue}>
-                {macronutrients?.protein || "0g"}
-              </Text>
-              <Text style={styles.macroLabel}>Protein</Text>
-            </View>
-            <View style={styles.macroCard}>
-              <Feather
-                name="wind"
-                size={20}
-                color="#3B82F6"
-                style={styles.macroIcon}
-              />
-              <Text style={styles.macroValue}>
-                {macronutrients?.carbohydrates || "0g"}
-              </Text>
-              <Text style={styles.macroLabel}>Carbs</Text>
-            </View>
-            <View style={styles.macroCard}>
-              <Feather
-                name="droplet"
-                size={20}
-                color="#EF4444"
-                style={styles.macroIcon}
-              />
-              <Text style={styles.macroValue}>
-                {macronutrients?.fat || "0g"}
-              </Text>
-              <Text style={styles.macroLabel}>Fat</Text>
-            </View>
-          </View>
-
-          {/* --- Detailed Nutrients --- */}
-          {otherNutrients?.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Detailed Nutrients</Text>
-              <View style={styles.nutrientList}>
-                {otherNutrients.map((item, index) => (
-                  <View key={index} style={styles.listItemContainer}>
-                    <View style={styles.bulletPoint} />
-                    <Text style={styles.listItem}>{item}</Text>
-                  </View>
-                ))}
+            {/* --- Macronutrients Grid --- */}
+            <View style={styles.macroGrid}>
+              {/* Highlighted Calories Card */}
+              <View style={[styles.macroCard, { backgroundColor: "#EDF5D1" }]}>
+                <Feather
+                  name="zap"
+                  size={20}
+                  color="#111827"
+                  style={styles.macroIcon}
+                />
+                <Text style={styles.macroValue}>
+                  {macronutrients?.calories || "0"}
+                </Text>
+                <Text style={styles.macroLabel}>Calories</Text>
+              </View>
+              <View style={styles.macroCard}>
+                <Feather
+                  name="target"
+                  size={20}
+                  color="#10B981"
+                  style={styles.macroIcon}
+                />
+                <Text style={styles.macroValue}>
+                  {macronutrients?.protein || "0g"}
+                </Text>
+                <Text style={styles.macroLabel}>Protein</Text>
+              </View>
+              <View style={styles.macroCard}>
+                <Feather
+                  name="wind"
+                  size={20}
+                  color="#3B82F6"
+                  style={styles.macroIcon}
+                />
+                <Text style={styles.macroValue}>
+                  {macronutrients?.carbohydrates || "0g"}
+                </Text>
+                <Text style={styles.macroLabel}>Carbs</Text>
+              </View>
+              <View style={styles.macroCard}>
+                <Feather
+                  name="droplet"
+                  size={20}
+                  color="#EF4444"
+                  style={styles.macroIcon}
+                />
+                <Text style={styles.macroValue}>
+                  {macronutrients?.fat || "0g"}
+                </Text>
+                <Text style={styles.macroLabel}>Fat</Text>
               </View>
             </View>
-          )}
 
-          {/* --- Additional Info --- */}
-          {additionalInfo && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Additional Info</Text>
-              <Text style={styles.additionalInfoText}>{additionalInfo}</Text>
-            </View>
-          )}
+            {/* --- Detailed Nutrients --- */}
+            {otherNutrients?.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Detailed Nutrients</Text>
+                <View style={styles.nutrientList}>
+                  {otherNutrients.map((item, index) => (
+                    <View key={index} style={styles.listItemContainer}>
+                      <View style={styles.bulletPoint} />
+                      <Text style={styles.listItem}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
 
-          {/* --- Health Advice Section --- */}
-          {healthAdvice && (
-            <View style={[styles.section, styles.healthAdviceSectionBase]}>
-              <View
-                style={[
-                  styles.healthAdviceContent,
-                  getHealthAdviceStyle(healthAdvice.suitability),
-                ]}
-              >
-                <View style={styles.healthAdviceHeader}>
-                  {getHealthAdviceIcon(healthAdvice.suitability)}
-                  <Text style={[styles.sectionTitle, styles.healthAdviceTitle]}>
-                    Health Insights
+            {/* --- Additional Info --- */}
+            {additionalInfo && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Additional Info</Text>
+                <Text style={styles.additionalInfoText}>{additionalInfo}</Text>
+              </View>
+            )}
+
+            {/* --- Health Advice Section --- */}
+            {healthAdvice && (
+              <View style={[styles.section, styles.healthAdviceSectionBase]}>
+                <View
+                  style={[
+                    styles.healthAdviceContent,
+                    getHealthAdviceStyle(healthAdvice.suitability),
+                  ]}
+                >
+                  <View style={styles.healthAdviceHeader}>
+                    {getHealthAdviceIcon(healthAdvice.suitability)}
+                    <Text
+                      style={[styles.sectionTitle, styles.healthAdviceTitle]}
+                    >
+                      Health Insights
+                    </Text>
+                  </View>
+                  <Text style={styles.healthAdviceText}>
+                    {healthAdvice.reason}
                   </Text>
                 </View>
-                <Text style={styles.healthAdviceText}>
-                  {healthAdvice.reason}
-                </Text>
               </View>
-            </View>
-          )}
-        </ScrollView>
+            )}
+          </ScrollView>
 
-        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <Text style={styles.closeButtonText}>{closeButtonLabel}</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    </View>
+          {/* THE UPDATED LIME GREEN BUTTON */}
+          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+            <Text style={styles.closeButtonText}>{closeButtonLabel}</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   modalOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "flex-end",
   },
   container: {
-    backgroundColor: "#F9FAFB", // Off-white clean background
+    backgroundColor: "#F8FAF9", // Matched App Background
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     maxHeight: "85%",
-    paddingBottom: 70, // Leaves room for Bottom Navigation Bar
+    paddingBottom: Platform.OS === "ios" ? 40 : 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.1,
@@ -218,11 +233,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 4,
   },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 20 },
+
   productName: {
     fontSize: 28,
     fontWeight: "800",
@@ -233,9 +245,10 @@ const styles = StyleSheet.create({
   summary: {
     fontSize: 15,
     color: "#6B7280",
-    fontWeight: "500",
+    fontWeight: "600",
     marginBottom: 24,
   },
+
   macroGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -255,20 +268,15 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
-  macroIcon: {
-    marginBottom: 8,
-  },
+  macroIcon: { marginBottom: 8 },
   macroValue: {
     fontSize: 22,
     fontWeight: "800",
     color: "#111827",
     marginBottom: 2,
   },
-  macroLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#9CA3AF",
-  },
+  macroLabel: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+
   section: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
@@ -286,9 +294,8 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 12,
   },
-  nutrientList: {
-    marginTop: 4,
-  },
+
+  nutrientList: { marginTop: 4 },
   listItemContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -301,77 +308,53 @@ const styles = StyleSheet.create({
     backgroundColor: "#D1D5DB",
     marginRight: 12,
   },
-  listItem: {
-    fontSize: 15,
-    color: "#4B5563",
-    fontWeight: "500",
-  },
-  additionalInfoText: {
-    fontSize: 15,
-    color: "#4B5563",
-    lineHeight: 22,
-  },
+  listItem: { fontSize: 15, color: "#4B5563", fontWeight: "600" },
+  additionalInfoText: { fontSize: 15, color: "#4B5563", lineHeight: 22 },
+
   healthAdviceSectionBase: {
     padding: 0,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#F3F4F6",
   },
-  healthAdviceContent: {
-    padding: 20,
-    borderLeftWidth: 6,
-  },
+  healthAdviceContent: { padding: 20, borderLeftWidth: 6 },
   healthAdviceHeader: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
   },
-  healthAdviceTitle: {
-    marginBottom: 0,
-    marginLeft: 8,
-  },
+  healthAdviceTitle: { marginBottom: 0, marginLeft: 8 },
   healthAdviceText: {
     fontSize: 15,
     color: "#4B5563",
     lineHeight: 22,
     marginTop: 4,
+    fontWeight: "500",
   },
-  healthAdviceGood: {
-    backgroundColor: "#F0FDF4",
-    borderLeftColor: "#10B981",
-  },
-  healthAdviceBad: {
-    backgroundColor: "#FEF2F2",
-    borderLeftColor: "#EF4444",
-  },
+  healthAdviceGood: { backgroundColor: "#F0FDF4", borderLeftColor: "#10B981" },
+  healthAdviceBad: { backgroundColor: "#FEF2F2", borderLeftColor: "#EF4444" },
   healthAdviceNeutral: {
     backgroundColor: "#FFFBEB",
     borderLeftColor: "#F59E0B",
   },
+
+  // UPDATED BUTTON DESIGN
   closeButton: {
-    backgroundColor: "#111827", // Premium Dark button
+    backgroundColor: "#D4EB9B", // Lime Green Signature!
     paddingVertical: 18,
     marginHorizontal: 24,
     marginTop: 10,
     borderRadius: 16,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
   },
   closeButtonText: {
-    color: "#FFFFFF",
+    color: "#111827", // Dark Text
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     letterSpacing: 0.5,
   },
-  errorIconContainer: {
-    alignItems: "center",
-    marginTop: 30,
-    marginBottom: 16,
-  },
+
+  errorIconContainer: { alignItems: "center", marginTop: 30, marginBottom: 16 },
   errorTitle: {
     fontSize: 24,
     fontWeight: "800",

@@ -206,74 +206,76 @@ exports.scanFoodFromImage = async (req, res) => {
   }
 };
 
-// Scan food by text using Gemini
+// Scan food by text using Gemini (FIXED CACHING)
 exports.scanFoodByText = async (req, res) => {
   try {
     const { foodName, quantityGrams, mealType } = req.body;
     const userId = req.userId;
 
     if (!foodName || !quantityGrams || !mealType) {
-      return res.status(400).json({
-        success: false,
-        message: "foodName, quantityGrams, and mealType are required",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing required fields" });
     }
 
-    // Get user
     const user = await User.findByPk(userId);
-    if (!user) {
-      // Added check for user existence
+    if (!user)
       return res
         .status(401)
         .json({ success: false, message: "User not found" });
+
+    // 🚨 1. CHECK THE CACHE FIRST!
+    const { Op } = require("sequelize");
+    let food = await Food.findOne({
+      where: { name: { [Op.iLike]: foodName } }, // Case-insensitive exact match
+    });
+
+    // 🚨 2. ONLY CALL AI IF IT'S A CACHE MISS
+    if (!food) {
+      console.log(`Cache miss for "${foodName}". Asking AI Chef...`);
+      const nutritionData =
+        await geminiService.getFoodNutritionFromText(foodName);
+
+      if (
+        !nutritionData ||
+        !nutritionData.foodName ||
+        nutritionData.foodName.toLowerCase().includes("not found")
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: `Could not find info for "${foodName}".`,
+          data: { scan: null },
+        });
+      }
+      // Save the new AI result to the database cache
+      food = await geminiService.createOrFetchFood(nutritionData);
+    } else {
+      console.log(
+        `Cache Hit! Loaded "${foodName}" instantly from local database.`,
+      );
     }
 
-    // Get nutrition info from Gemini
-    const nutritionData =
-      await geminiService.getFoodNutritionFromText(foodName);
-
-    if (
-      !nutritionData ||
-      !nutritionData.foodName ||
-      nutritionData.foodName.toLowerCase().includes("not found")
-    ) {
-      console.log("Gemini failed to find nutrition data for text:", foodName);
-      return res.status(400).json({
-        success: false,
-        message: `Could not find nutritional information for "${foodName}". Please try a different name.`,
-        data: { scan: null }, // Explicitly null data
-      });
-    }
-
-    // Create or fetch food
-    const food = await geminiService.createOrFetchFood(nutritionData);
-
-    // Detect allergens
+    // Detect allergens & Health Advice
     const allergenDetection = await geminiService.detectAllergens(
       food.id,
       user.allergies,
     );
-
-    // Get health advice
     const healthAdvice = await geminiService.getHealthAdvice(food, user);
 
-    // Create scan record
     const scan = await FoodScan.create({
       userId,
       foodId: food.id,
       quantityGrams,
       mealType,
       scanDate: new Date().toISOString().split("T")[0],
-      scannedAt: new Date(), // <-- Added scannedAt
+      scannedAt: new Date(),
       detectedAllergens: allergenDetection.detectedAllergens,
       allergenWarning: allergenDetection.hasAllergen,
-      confidenceScore: nutritionData.confidence || 0.85,
-      // Add the health advice fields
+      confidenceScore: 0.99, // Cache/Text searches are high confidence
       healthSuitability: healthAdvice?.suitability || null,
       healthReason: healthAdvice?.reason || null,
     });
 
-    // Calculate nutrition for this quantity
     const nutrition = geminiService.calculateNutritionForQuantity(
       food,
       quantityGrams,
@@ -282,21 +284,17 @@ exports.scanFoodByText = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Food scanned successfully",
-      data: {
-        scan: {
-          ...scan.toJSON(),
-          food: food.toJSON(),
-          nutrition: nutrition,
-        },
-      },
+      data: { scan: { ...scan.toJSON(), food: food.toJSON(), nutrition } },
     });
   } catch (err) {
     console.error("Scan food by text error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to scan food",
-      error: err.message,
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Failed to scan food",
+        error: err.message,
+      });
   }
 };
 
@@ -513,13 +511,11 @@ exports.scanBarcode = async (req, res) => {
     // ==========================================
     if (!food) {
       console.log("FAILURE: Barcode not found.");
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message:
-            "Barcode not found. Try snapping a photo of the nutrition label using AI Vision!",
-        });
+      return res.status(404).json({
+        success: false,
+        message:
+          "Barcode not found. Try snapping a photo of the nutrition label using AI Vision!",
+      });
     }
 
     // ==========================================

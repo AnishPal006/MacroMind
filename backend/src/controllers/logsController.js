@@ -48,14 +48,14 @@ exports.getDailySummary = async (req, res) => {
       const nutrition = {
         calories: Math.round((scan.food.caloriesPer100g || 0) * multiplier),
         protein: parseFloat(
-          ((scan.food.proteinGrams || 0) * multiplier).toFixed(2)
+          ((scan.food.proteinGrams || 0) * multiplier).toFixed(2),
         ),
         carbs: parseFloat(
-          ((scan.food.carbsGrams || 0) * multiplier).toFixed(2)
+          ((scan.food.carbsGrams || 0) * multiplier).toFixed(2),
         ),
         fats: parseFloat(((scan.food.fatsGrams || 0) * multiplier).toFixed(2)),
         fiber: parseFloat(
-          ((scan.food.fiberGrams || 0) * multiplier).toFixed(2)
+          ((scan.food.fiberGrams || 0) * multiplier).toFixed(2),
         ),
       };
 
@@ -137,13 +137,13 @@ exports.getDailySummary = async (req, res) => {
           caloriePercent:
             user.dailyCaloricGoal > 0
               ? Math.round(
-                  (dailyLog.totalCalories / user.dailyCaloricGoal) * 100
+                  (dailyLog.totalCalories / user.dailyCaloricGoal) * 100,
                 )
               : 0,
           proteinPercent:
             user.proteinGoalGrams > 0
               ? Math.round(
-                  (dailyLog.totalProtein / user.proteinGoalGrams) * 100
+                  (dailyLog.totalProtein / user.proteinGoalGrams) * 100,
                 )
               : 0,
           carbsPercent:
@@ -202,7 +202,7 @@ exports.getWeeklySummary = async (req, res) => {
       calories:
         logs.length > 0
           ? Math.round(
-              logs.reduce((sum, l) => sum + l.totalCalories, 0) / logs.length
+              logs.reduce((sum, l) => sum + l.totalCalories, 0) / logs.length,
             )
           : 0,
       protein:
@@ -210,7 +210,7 @@ exports.getWeeklySummary = async (req, res) => {
           ? parseFloat(
               (
                 logs.reduce((sum, l) => sum + l.totalProtein, 0) / logs.length
-              ).toFixed(2)
+              ).toFixed(2),
             )
           : 0,
       carbs:
@@ -218,7 +218,7 @@ exports.getWeeklySummary = async (req, res) => {
           ? parseFloat(
               (
                 logs.reduce((sum, l) => sum + l.totalCarbs, 0) / logs.length
-              ).toFixed(2)
+              ).toFixed(2),
             )
           : 0,
       fats:
@@ -226,7 +226,7 @@ exports.getWeeklySummary = async (req, res) => {
           ? parseFloat(
               (
                 logs.reduce((sum, l) => sum + l.totalFats, 0) / logs.length
-              ).toFixed(2)
+              ).toFixed(2),
             )
           : 0,
     };
@@ -280,5 +280,51 @@ exports.removeFoodScan = async (req, res) => {
       message: "Failed to remove scan",
       error: err.message,
     });
+  }
+};
+// Log water intake
+exports.logWaterIntake = async (req, res) => {
+  try {
+    const userId = req.userId;
+    // 🚨 Explicitly parse the number. If it fails, default to 0.
+    const amountMl =
+      req.body.amountMl !== undefined ? parseInt(req.body.amountMl, 10) : 0;
+    const date = new Date().toISOString().split("T")[0];
+
+    const DailyLog = require("../models/DailyLog");
+
+    // Strictly find the exact log for today
+    let dailyLog = await DailyLog.findOne({ where: { userId, date } });
+
+    if (dailyLog) {
+      // REPLACE the value securely
+      dailyLog.waterIntakeMl = amountMl;
+      await dailyLog.save();
+    } else {
+      // Create a fresh log if none exists today
+      dailyLog = await DailyLog.create({
+        userId,
+        date,
+        totalCalories: 0,
+        totalProtein: 0,
+        totalCarbs: 0,
+        totalFats: 0,
+        totalFiber: 0,
+        waterIntakeMl: amountMl,
+      });
+    }
+
+    res
+      .status(200)
+      .json({ success: true, message: "Water logged", data: dailyLog });
+  } catch (err) {
+    console.error("Log water error:", err);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Failed to log water",
+        error: err.message,
+      });
   }
 };

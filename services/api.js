@@ -84,6 +84,25 @@ class ApiService {
   async getCurrentUser() {
     return this.request("/auth/me");
   }
+  async updateProfile(profileData) {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        // Ensure this matches your backend route
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(profileData),
+      });
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Update Profile Error:", error);
+      return { success: false, message: "Network error" };
+    }
+  }
 
   // Food endpoints
   async searchFood(query) {
@@ -175,7 +194,7 @@ class ApiService {
   }
 
   async updateProfile(profileData) {
-    return this.request("/user/profile", {
+    return this.request("/auth/me", {
       method: "PUT",
       body: JSON.stringify(profileData),
     });
@@ -195,15 +214,17 @@ class ApiService {
     return this.request("/inventory/"); // GET request to fetch all items
   }
 
+  // Add item to inventory
   async addInventoryItem(itemData) {
-    return this.request("/inventory/", {
+    return this.request("/inventory", {
       method: "POST",
       body: JSON.stringify(itemData),
     });
   }
 
-  async updateInventoryItem(itemId, itemData) {
-    return this.request(`/inventory/${itemId}`, {
+  // ADD THIS NEW FUNCTION TO EDIT ITEMS!
+  async updateInventoryItem(id, itemData) {
+    return this.request(`/inventory/${id}`, {
       method: "PUT",
       body: JSON.stringify(itemData),
     });

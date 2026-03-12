@@ -137,3 +137,68 @@ exports.getCurrentUser = async (req, res) => {
     });
   }
 };
+
+// Update current user
+// Update current user
+exports.updateCurrentUser = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const updateData = req.body;
+
+    console.log("\n=== INCOMING PROFILE UPDATE ===");
+    console.log("Received Payload:", updateData);
+
+    const User = require("../models/User");
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // 1. Direct Assignment for Text/Arrays
+    if (updateData.fullName) user.fullName = updateData.fullName;
+    if (updateData.allergies) user.allergies = updateData.allergies;
+    if (updateData.healthConditions)
+      user.healthConditions = updateData.healthConditions;
+    if (updateData.dietaryPreferences)
+      user.dietaryPreferences = updateData.dietaryPreferences;
+
+    // 2. Force strict Number casting for dietary goals
+    if (updateData.dailyCaloricGoal)
+      user.dailyCaloricGoal = Number(updateData.dailyCaloricGoal);
+    if (updateData.proteinGoalGrams)
+      user.proteinGoalGrams = Number(updateData.proteinGoalGrams);
+    if (updateData.carbsGoalGrams)
+      user.carbsGoalGrams = Number(updateData.carbsGoalGrams);
+    if (updateData.fatsGoalGrams)
+      user.fatsGoalGrams = Number(updateData.fatsGoalGrams);
+    if (updateData.waterIntakeGoalMl)
+      user.waterIntakeGoalMl = Number(updateData.waterIntakeGoalMl);
+
+    console.log("Saving these exact numbers to PostgreSQL:", {
+      calories: user.dailyCaloricGoal,
+      protein: user.proteinGoalGrams,
+      carbs: user.carbsGoalGrams,
+      fats: user.fatsGoalGrams,
+    });
+
+    // 3. Save and force a hard reload from the database
+    await user.save();
+    await user.reload();
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: user.toJSON(),
+    });
+  } catch (err) {
+    console.error("Update profile error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update profile",
+      error: err.message,
+    });
+  }
+};

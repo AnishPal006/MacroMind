@@ -119,7 +119,7 @@ exports.searchOrSuggestFood = async (foodName) => {
     let food = await Food.findOne({
       where: {
         name: {
-          [Op.iLike]: `%${foodName}%`,
+          [Op.iLike]: foodName,
         },
       },
     });
@@ -193,8 +193,8 @@ exports.detectAllergens = async (foodId, userAllergens) => {
       userAllergens.some(
         (userAllergen) =>
           userAllergen.toLowerCase().includes(allergen.toLowerCase()) ||
-          allergen.toLowerCase().includes(userAllergen.toLowerCase())
-      )
+          allergen.toLowerCase().includes(userAllergen.toLowerCase()),
+      ),
     );
 
     return {
@@ -289,7 +289,7 @@ exports.getMealSuggestions = async (userId) => {
           "Failed to parse meal suggestions JSON:",
           parseError,
           "Raw response:",
-          responseText
+          responseText,
         );
         suggestions = [
           {
@@ -304,7 +304,7 @@ exports.getMealSuggestions = async (userId) => {
     } else {
       console.warn(
         "No valid JSON array found in meal suggestions response:",
-        responseText
+        responseText,
       );
       suggestions = [
         {
@@ -371,7 +371,7 @@ exports.getHealthAdvice = async (food, user) => {
             ? food.allergens.join(", ")
             : "None"
         }
-
+a
         User Health Profile:
         Allergies: ${
           user.allergies && user.allergies.length > 0
@@ -412,7 +412,7 @@ exports.getHealthAdvice = async (food, user) => {
     } else {
       console.warn(
         "Failed to parse valid health advice from Gemini response:",
-        responseText
+        responseText,
       );
       return {
         suitability: "neutral",

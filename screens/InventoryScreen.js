@@ -1,331 +1,260 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
+  Modal,
   TextInput,
-  ScrollView,
-  Modal as RNModal,
-  Alert,
   ActivityIndicator,
+  Alert,
   RefreshControl,
   Platform,
   KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons"; // <-- Added Vector Icons
+import { Feather } from "@expo/vector-icons";
 import apiService from "../services/api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-  try {
-    return new Date(dateString + "T00:00:00").toLocaleDateString();
-  } catch (e) {
-    return "Invalid Date";
-  }
-};
 
 export default function InventoryScreen() {
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [inventory, setInventory] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentItem, setCurrentItem] = useState(null);
-  const [suggestions, setSuggestions] = useState([]);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [suggestionsModalVisible, setSuggestionsModalVisible] = useState(false);
-  const [formData, setFormData] = useState({
-    itemName: "",
+
+  // Modal & Edit State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [newItem, setNewItem] = useState({
+    name: "",
     quantity: "",
     unit: "pieces",
     expiryDate: "",
   });
+  const [isSaving, setIsSaving] = useState(false);
 
-  const loadInventory = useCallback(async (isRefreshing = false) => {
-    if (!isRefreshing) setLoading(true);
+  // AI State
+  const [isGettingSuggestions, setIsGettingSuggestions] = useState(false);
+  const cancelAiRef = useRef(false);
+
+  // NEW: Premium Recipe Modal State
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [recipeContent, setRecipeContent] = useState("");
+
+  const fetchInventory = async () => {
     try {
       const response = await apiService.getInventory();
-      if (response.success && Array.isArray(response.data)) {
-        setInventoryItems(response.data);
-      } else {
-        setInventoryItems([]);
-        Alert.alert("Error", response.message || "Failed to load inventory");
-      }
+      if (response.success) setInventory(response.data || []);
     } catch (error) {
-      console.error("Load inventory error:", error);
-      Alert.alert("Error", error.message || "Could not fetch inventory");
-      setInventoryItems([]);
+      console.error("Failed to fetch inventory:", error);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setIsLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    loadInventory();
-  }, [loadInventory]);
+    fetchInventory();
+  }, []);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadInventory(true);
+    await fetchInventory();
+    setRefreshing(false);
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
-    setIsEditing(false);
-    setCurrentItem(null);
-    setFormData({ itemName: "", quantity: "", unit: "pieces", expiryDate: "" });
+  const openAddModal = () => {
+    setEditingItemId(null);
+    setNewItem({ name: "", quantity: "", unit: "pieces", expiryDate: "" });
+    setShowAddModal(true);
   };
 
-  const handleAddItem = () => {
-    setIsEditing(false);
-    setCurrentItem(null);
-    setFormData({ itemName: "", quantity: "", unit: "pieces", expiryDate: "" });
-    setModalVisible(true);
-  };
-
-  const handleEditItem = (item) => {
-    setIsEditing(true);
-    setCurrentItem(item);
-    setFormData({
-      itemName: item.itemName || "",
-      quantity: item.quantity?.toString() || "",
+  const openEditModal = (item) => {
+    setEditingItemId(item.id);
+    setNewItem({
+      name: item.itemName || item.name || item.food?.name || "",
+      quantity: item.quantity?.toString() || item.amount?.toString() || "",
       unit: item.unit || "pieces",
-      expiryDate: item.expiryDate || "",
+      expiryDate: item.expiryDate ? item.expiryDate.split("T")[0] : "",
     });
-    setModalVisible(true);
+    setShowAddModal(true);
   };
 
-  const handleSaveItem = async () => {
-    if (!formData.itemName || !formData.quantity) {
-      Alert.alert("Error", "Item name and quantity are required.");
+  const handleSave = async () => {
+    const parsedQty = parseFloat(newItem.quantity);
+    if (!newItem.name || isNaN(parsedQty) || parsedQty <= 0) {
+      Alert.alert(
+        "Missing Details",
+        "Please provide a valid item name and quantity.",
+      );
       return;
     }
-    const dataToSend = {
-      itemName: formData.itemName,
-      quantity: parseFloat(formData.quantity) || 0,
-      unit: formData.unit || "pieces",
-      expiryDate: /^\d{4}-\d{2}-\d{2}$/.test(formData.expiryDate)
-        ? formData.expiryDate
-        : null,
-    };
-    setLoading(true);
+
+    setIsSaving(true);
     try {
-      let response;
-      if (isEditing && currentItem) {
-        response = await apiService.updateInventoryItem(
-          currentItem.id,
-          dataToSend,
-        );
+      const payload = {
+        itemName: newItem.name,
+        name: newItem.name,
+        quantity: parsedQty,
+        amount: parsedQty,
+        unit: newItem.unit,
+        expiryDate: newItem.expiryDate || null,
+      };
+
+      let res;
+      if (editingItemId) {
+        res = await apiService.updateInventoryItem(editingItemId, payload);
       } else {
-        response = await apiService.addInventoryItem(dataToSend);
+        res = await apiService.addInventoryItem(payload);
       }
-      if (response.success) {
-        closeModal();
-        loadInventory();
+
+      if (res.success) {
+        setShowAddModal(false);
+        fetchInventory();
       } else {
-        Alert.alert("Error", response.message || "Failed to save item.");
-        setLoading(false);
+        Alert.alert("Error", res.message || "Failed to save item.");
       }
     } catch (error) {
-      console.error("Save inventory item error:", error);
-      Alert.alert("Error", error.message || "Could not save item.");
-      setLoading(false);
+      Alert.alert("Error", "Could not connect to the server.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDeleteItem = (itemId) => {
-    Alert.alert("Delete Item", "Are you sure you want to delete this item?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          setLoading(true);
-          try {
-            const response = await apiService.deleteInventoryItem(itemId);
-            if (response.success) {
-              loadInventory();
-            } else {
-              Alert.alert(
-                "Error",
-                response.message || "Failed to delete item.",
-              );
-              setLoading(false);
+  const handleDelete = (id) => {
+    Alert.alert(
+      "Remove Item",
+      "Are you sure you want to discard this from your pantry?",
+      [
+        { text: "Keep", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await apiService.deleteInventoryItem(id);
+              if (res.success)
+                setInventory(inventory.filter((item) => item.id !== id));
+            } catch (error) {
+              Alert.alert("Error", "Failed to remove item.");
             }
-          } catch (error) {
-            console.error("Delete inventory item error:", error);
-            Alert.alert("Error", error.message || "Could not delete item.");
-            setLoading(false);
-          }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
-  const fetchMealSuggestions = async () => {
-    setSuggestionsLoading(true);
-    setSuggestions([]);
-    setSuggestionsModalVisible(true);
+  // --- AI SUGGESTIONS (NOW WITH PREMIUM MODAL) ---
+  const handleGetSuggestions = async () => {
+    setIsGettingSuggestions(true);
+    cancelAiRef.current = false;
 
     try {
-      const currentItemNames = [
-        ...new Set(inventoryItems.map((item) => item.itemName)),
-      ]
-        .sort()
-        .join(",");
+      const res = await apiService.getMealSuggestions();
 
-      const cachedSuggestionsJSON = await AsyncStorage.getItem(
-        "cachedMealSuggestions",
-      );
-      const cachedInventoryString = await AsyncStorage.getItem(
-        "cachedInventoryString",
-      );
-      const cachedSuggestions = cachedSuggestionsJSON
-        ? JSON.parse(cachedSuggestionsJSON)
-        : null;
-
-      if (cachedInventoryString === currentItemNames && cachedSuggestions) {
-        setSuggestions(cachedSuggestions);
-      } else {
-        const response = await apiService.getMealSuggestions();
-
-        if (
-          response.success &&
-          Array.isArray(response.data) &&
-          response.data.length > 0
-        ) {
-          if (
-            response.data[0]?.type === "Error" ||
-            response.data[0]?.type === "Info"
-          ) {
-            setSuggestions(response.data);
-          } else {
-            setSuggestions(response.data);
-            await AsyncStorage.setItem(
-              "cachedMealSuggestions",
-              JSON.stringify(response.data),
-            );
-            await AsyncStorage.setItem(
-              "cachedInventoryString",
-              currentItemNames,
-            );
-          }
-        } else if (response.data?.length === 0) {
-          setSuggestions([]);
+      if (!cancelAiRef.current) {
+        if (res.success) {
+          // 🚨 THE FIX: Set the text and open our beautiful custom modal!
+          setRecipeContent(
+            res.data.suggestions ||
+              "No ideas found. Try adding more ingredients!",
+          );
+          setShowRecipeModal(true);
         } else {
-          const errorMsg =
-            response.message ||
-            (response.data && response.data[0]?.description) ||
-            "Could not get suggestions.";
-          setSuggestions([
-            { mealName: "Info", description: errorMsg, type: "Info" },
-          ]);
+          Alert.alert("Error", "Could not generate recipes.");
         }
       }
     } catch (error) {
-      console.error("Fetch suggestions error:", error);
-      Alert.alert("Error", "Could not fetch meal suggestions.");
-      setSuggestions([
-        {
-          mealName: "Error",
-          description: "Failed to fetch suggestions.",
-          type: "Error",
-        },
-      ]);
+      if (!cancelAiRef.current)
+        Alert.alert("Error", "Failed to reach AI Chef.");
     } finally {
-      setSuggestionsLoading(false);
+      if (!cancelAiRef.current) setIsGettingSuggestions(false);
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.itemContainer}>
-      <View style={styles.itemIconBox}>
-        <Feather name="box" size={20} color="#6B7280" />
-      </View>
-      <View style={styles.itemTextContainer}>
-        <Text style={styles.itemName}>{item.itemName}</Text>
-        <Text style={styles.itemDetails}>
-          {item.quantity} {item.unit || ""} • Exp: {formatDate(item.expiryDate)}
-        </Text>
-      </View>
-      <View style={styles.itemActions}>
-        <TouchableOpacity
-          onPress={() => handleEditItem(item)}
-          style={styles.actionIconButton}
-        >
-          <Feather name="edit-2" size={18} color="#6B7280" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => handleDeleteItem(item.id)}
-          style={styles.actionIconButton}
-        >
-          <Feather name="trash-2" size={18} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const handleCancelAi = () => {
+    cancelAiRef.current = true;
+    setIsGettingSuggestions(false);
+  };
 
-  const renderEmptyList = () => (
-    <View style={styles.emptyContainer}>
-      <Feather
-        name="inbox"
-        size={48}
-        color="#D1D5DB"
-        style={{ marginBottom: 16 }}
-      />
-      <Text style={styles.emptyTitle}>Inventory Empty</Text>
-      <Text style={styles.emptySubtitle}>
-        Tap the '+' button to start tracking your food items.
-      </Text>
-    </View>
-  );
+  const renderItem = (item) => {
+    let isExpiringSoon = false;
+    let expiryText = "No expiry set";
+
+    if (item.expiryDate) {
+      const expDate = new Date(item.expiryDate);
+      const diffDays = Math.ceil(
+        (expDate - new Date()) / (1000 * 60 * 60 * 24),
+      );
+
+      if (diffDays < 0) {
+        expiryText = "Expired";
+        isExpiringSoon = true;
+      } else if (diffDays <= 3) {
+        expiryText = `Expiring in ${diffDays} day${diffDays === 1 ? "" : "s"}`;
+        isExpiringSoon = true;
+      } else {
+        expiryText = `Exp. ${expDate.toLocaleDateString([], { month: "short", day: "numeric" })}`;
+      }
+    }
+
+    const displayName =
+      item.itemName || item.name || item.food?.name || "Unknown Item";
+    const displayQty =
+      item.quantity !== undefined ? item.quantity : item.amount || 0;
+
+    return (
+      <TouchableOpacity
+        key={item.id.toString()}
+        style={styles.card}
+        activeOpacity={0.7}
+        onPress={() => openEditModal(item)}
+      >
+        <View style={styles.iconCircle}>
+          <Feather name="box" size={22} color="#111827" />
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.itemName} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <Text style={styles.itemQuantity}>
+            {displayQty} {item.unit || "units"}
+          </Text>
+          <View
+            style={[
+              styles.expiryBadge,
+              isExpiringSoon && styles.expiryBadgeWarning,
+            ]}
+          >
+            <Text
+              style={[
+                styles.expiryText,
+                isExpiringSoon && styles.expiryTextWarning,
+              ]}
+            >
+              {expiryText}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.cardRight}>
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => handleDelete(item.id)}
+          >
+            <Feather name="trash-2" size={20} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Inventory</Text>
-        <TouchableOpacity onPress={handleAddItem} style={styles.addButton}>
-          <Feather name="plus" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>My Pantry</Text>
       </View>
 
-      <View style={styles.suggestionButtonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.suggestionButton,
-            (loading || refreshing || inventoryItems.length === 0) &&
-              styles.suggestionButtonDisabled,
-          ]}
-          onPress={fetchMealSuggestions}
-          disabled={loading || refreshing || inventoryItems.length === 0}
-        >
-          <Feather
-            name="loader"
-            size={18}
-            color="#FFFFFF"
-            style={{ marginRight: 8 }}
-          />
-          <Text style={styles.suggestionButtonText}>Generate Meal Ideas</Text>
-        </TouchableOpacity>
-      </View>
-
-      {loading && !refreshing && (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#111827" />
-        </View>
-      )}
-
-      <FlatList
-        data={inventoryItems}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id.toString()}
-        ListEmptyComponent={!loading ? renderEmptyList : null}
-        contentContainerStyle={styles.listContent}
+      <ScrollView
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -333,416 +262,524 @@ export default function InventoryScreen() {
             tintColor="#111827"
           />
         }
-      />
-
-      {/* Add/Edit Modal */}
-      <RNModal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={closeModal}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
+        <TouchableOpacity
+          style={styles.aiBanner}
+          onPress={handleGetSuggestions}
         >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {isEditing ? "Edit Item" : "Add New Item"}
-            </Text>
-
-            <Text style={styles.label}>Item Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Apples, Milk"
-              placeholderTextColor="#9CA3AF"
-              value={formData.itemName}
-              onChangeText={(text) =>
-                setFormData({ ...formData, itemName: text })
-              }
-            />
-
-            <View style={styles.row}>
-              <View style={styles.column}>
-                <Text style={styles.label}>Quantity</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 5"
-                  placeholderTextColor="#9CA3AF"
-                  value={formData.quantity}
-                  onChangeText={(text) =>
-                    setFormData({
-                      ...formData,
-                      quantity: text.replace(/[^0-9.]/g, ""),
-                    })
-                  }
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.column}>
-                <Text style={styles.label}>Unit</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., kg, L"
-                  placeholderTextColor="#9CA3AF"
-                  value={formData.unit}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, unit: text })
-                  }
-                />
-              </View>
-            </View>
-
-            <Text style={styles.label}>Expiry Date</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#9CA3AF"
-              value={formData.expiryDate}
-              onChangeText={(text) =>
-                setFormData({ ...formData, expiryDate: text })
-              }
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={closeModal}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={handleSaveItem}
-              >
-                <Text style={styles.saveButtonText}>Save Item</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.aiBannerIcon}>
+            <Feather name="cpu" size={28} color="#111827" />
           </View>
-        </KeyboardAvoidingView>
-      </RNModal>
+          <View style={styles.aiBannerTextContainer}>
+            <Text style={styles.aiBannerTitle}>AI Chef Recipes</Text>
+            <Text style={styles.aiBannerSub}>
+              Generate meals from your pantry
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={24} color="#D4EB9B" />
+        </TouchableOpacity>
 
-      {/* Meal Suggestions Modal */}
-      <RNModal
+        <Text style={styles.sectionTitle}>Inventory</Text>
+
+        {isLoading ? (
+          <ActivityIndicator
+            size="large"
+            color="#111827"
+            style={{ marginTop: 40 }}
+          />
+        ) : inventory.length === 0 ? (
+          <View style={styles.centerContent}>
+            <View style={styles.emptyCircle}>
+              <Feather name="archive" size={40} color="#9CA3AF" />
+            </View>
+            <Text style={styles.emptyTitle}>Pantry is Empty</Text>
+            <Text style={styles.emptyText}>
+              Track ingredients to prevent food waste.
+            </Text>
+          </View>
+        ) : (
+          inventory.map((item) => renderItem(item))
+        )}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={styles.floatingAddBtn}
+        onPress={openAddModal}
+        activeOpacity={0.8}
+      >
+        <Feather name="plus" size={24} color="#D4EB9B" />
+        <Text style={styles.floatingAddText}>Add Item</Text>
+      </TouchableOpacity>
+
+      {/* --- ADD / EDIT ITEM MODAL --- */}
+      <Modal
+        visible={showAddModal}
+        transparent
         animationType="slide"
-        transparent={true}
-        visible={suggestionsModalVisible}
-        onRequestClose={() => setSuggestionsModalVisible(false)}
+        onRequestClose={() => setShowAddModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.suggestionsModalContent}>
-            <View style={styles.suggestionsHeader}>
-              <Text style={styles.modalTitle}>Meal Ideas</Text>
-              <TouchableOpacity
-                onPress={() => setSuggestionsModalVisible(false)}
-              >
-                <Feather name="x" size={24} color="#9CA3AF" />
-              </TouchableOpacity>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContent}
+          >
+            <View style={styles.dragPill} />
+            <Text style={styles.modalTitle}>
+              {editingItemId ? "Edit Ingredient" : "New Ingredient"}
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Food Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., Rice, Apples"
+                value={newItem.name}
+                onChangeText={(text) => setNewItem({ ...newItem, name: text })}
+                placeholderTextColor="#9CA3AF"
+              />
             </View>
 
-            {suggestionsLoading ? (
-              <View style={{ paddingVertical: 40, alignItems: "center" }}>
-                <ActivityIndicator size="large" color="#111827" />
-                <Text style={{ marginTop: 12, color: "#6B7280" }}>
-                  Cooking up ideas...
-                </Text>
+            <View style={styles.row}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                <Text style={styles.inputLabel}>Amount</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 500"
+                  value={newItem.quantity}
+                  onChangeText={(text) =>
+                    setNewItem({ ...newItem, quantity: text })
+                  }
+                  keyboardType="numeric"
+                  placeholderTextColor="#9CA3AF"
+                />
               </View>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {suggestions.length > 0 ? (
-                  suggestions.map((suggestion, index) => (
-                    <View key={index} style={styles.suggestionItem}>
-                      <Text style={styles.suggestionName}>
-                        {suggestion.mealName}
-                      </Text>
-                      <Text style={styles.suggestionType}>
-                        {suggestion.type} • {suggestion.estimatedPrepTime}
-                      </Text>
-                      <Text style={styles.suggestionDesc}>
-                        {suggestion.description}
-                      </Text>
-                      {suggestion.primaryIngredients &&
-                        suggestion.primaryIngredients.length > 0 && (
-                          <Text style={styles.suggestionIngredients}>
-                            Uses: {suggestion.primaryIngredients.join(", ")}
-                          </Text>
-                        )}
-                    </View>
-                  ))
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}>
+                <Text style={styles.inputLabel}>Unit</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="g, ml, pieces"
+                  value={newItem.unit}
+                  onChangeText={(text) =>
+                    setNewItem({ ...newItem, unit: text })
+                  }
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Expiry Date (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM-DD"
+                value={newItem.expiryDate}
+                onChangeText={(text) =>
+                  setNewItem({ ...newItem, expiryDate: text })
+                }
+                placeholderTextColor="#9CA3AF"
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setShowAddModal(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#111827" />
                 ) : (
-                  <Text style={styles.suggestionDesc}>
-                    No suggestions available based on your current inventory.
+                  <Text style={styles.saveBtnText}>
+                    {editingItemId ? "Save Changes" : "Save to Pantry"}
                   </Text>
                 )}
-              </ScrollView>
-            )}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* --- AI LOADING MODAL --- */}
+      <Modal visible={isGettingSuggestions} transparent animationType="fade">
+        <View style={styles.aiOverlay}>
+          <View style={styles.aiLoadingCard}>
+            <ActivityIndicator size="large" color="#D4EB9B" />
+            <Text style={styles.aiLoadingTitle}>Chef is thinking...</Text>
+            <Text style={styles.aiLoadingSub}>Analyzing your ingredients</Text>
+            <TouchableOpacity
+              style={styles.aiCancelBtn}
+              onPress={handleCancelAi}
+            >
+              <Text style={styles.aiCancelText}>Cancel Search</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </RNModal>
-    </SafeAreaView>
+      </Modal>
+
+      {/* 🚨 THE NEW PREMIUM RECIPE MODAL 🚨 */}
+      <Modal
+        visible={showRecipeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowRecipeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.recipeModalContent}>
+            <View style={styles.dragPillDark} />
+
+            <View style={styles.recipeHeaderRow}>
+              <View style={styles.aiBannerIcon}>
+                <Feather name="cpu" size={24} color="#111827" />
+              </View>
+              <Text style={styles.recipeModalTitle}>AI Chef Recipes</Text>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ flex: 1, marginTop: 10 }}
+            >
+              {/* This splits the text by double line breaks into beautiful individual cards! */}
+              {recipeContent.split("\n\n").map((recipe, index) => {
+                if (!recipe.trim()) return null;
+                return (
+                  <View key={index} style={styles.recipeCard}>
+                    <Text style={styles.recipeText}>{recipe.trim()}</Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.closeRecipeBtn}
+              onPress={() => setShowRecipeModal(false)}
+            >
+              <Text style={styles.closeRecipeBtnText}>Close Recipes</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  container: { flex: 1, backgroundColor: "#F8FAF9" },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: "#F9FAFB",
+    paddingTop: Platform.OS === "ios" ? 60 : 50,
+    paddingBottom: 10,
+    backgroundColor: "#F8FAF9",
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  addButton: {
-    backgroundColor: "#111827", // Sleek dark button
-    borderRadius: 20,
-    width: 44,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  suggestionButtonContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    backgroundColor: "#F9FAFB",
-  },
-  suggestionButton: {
+  headerTitle: { fontSize: 28, fontWeight: "800", color: "#111827" },
+  listContainer: { paddingHorizontal: 20, paddingBottom: 160, paddingTop: 10 },
+
+  aiBanner: {
     flexDirection: "row",
-    backgroundColor: "#111827", // Premium dark button
-    paddingVertical: 16,
-    borderRadius: 16,
     alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
+    backgroundColor: "#111827",
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: "#D4EB9B",
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowRadius: 15,
+    elevation: 5,
   },
-  suggestionButtonDisabled: {
-    backgroundColor: "#E5E7EB",
-    shadowOpacity: 0,
-    elevation: 0,
+  aiBannerIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#D4EB9B",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
   },
-  suggestionButtonText: {
+  aiBannerTextContainer: { flex: 1 },
+  aiBannerTitle: {
+    fontSize: 18,
+    fontWeight: "800",
     color: "#FFFFFF",
-    fontSize: 15,
+    marginBottom: 2,
+  },
+  aiBannerSub: { fontSize: 13, fontWeight: "600", color: "#9CA3AF" },
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: "700",
+    color: "#111827",
+    marginBottom: 16,
   },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 80,
-  },
-  itemContainer: {
+
+  card: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.03,
     shadowRadius: 10,
     elevation: 2,
   },
-  itemIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  iconCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: "#F3F4F6",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
   },
-  itemTextContainer: {
-    flex: 1,
-  },
+  cardContent: { flex: 1, justifyContent: "center" },
   itemName: {
     fontSize: 16,
     fontWeight: "700",
     color: "#111827",
     marginBottom: 4,
   },
-  itemDetails: {
+  itemQuantity: {
     fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "500",
+    color: "#4B5563",
+    fontWeight: "600",
+    marginBottom: 8,
   },
-  itemActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  actionIconButton: {
-    padding: 8,
+
+  expiryBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: "#F9FAFB",
   },
-  emptyContainer: {
-    flex: 1,
+  expiryBadgeWarning: { backgroundColor: "#FEF2F2" },
+  expiryText: { fontSize: 11, fontWeight: "700", color: "#6B7280" },
+  expiryTextWarning: { color: "#EF4444" },
+  cardRight: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingLeft: 10,
+  },
+  deleteBtn: { padding: 8 },
+
+  centerContent: {
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 80,
-    paddingHorizontal: 40,
+    marginTop: 40,
+  },
+  emptyCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
     color: "#111827",
     marginBottom: 8,
   },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    lineHeight: 20,
+  emptyText: { fontSize: 15, color: "#6B7280" },
+
+  floatingAddBtn: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 110 : 100,
+    left: "50%",
+    transform: [{ translateX: -70 }],
+    backgroundColor: "#111827",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    shadowColor: "#D4EB9B",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
+  floatingAddText: {
+    color: "#D4EB9B",
+    fontSize: 16,
+    fontWeight: "800",
+    marginLeft: 8,
+  },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)", // Lighter modern overlay
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: 24,
-    width: "100%",
-    maxWidth: 380,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
   },
-  suggestionsModalContent: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 24,
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "75%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  suggestionsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  dragPill: {
+    width: 40,
+    height: 5,
+    backgroundColor: "#D1D5DB",
+    borderRadius: 5,
+    alignSelf: "center",
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
     color: "#111827",
-    marginBottom: Platform.OS === "android" ? 0 : 20, // adjust based on header usage
+    marginBottom: 24,
+    textAlign: "center",
   },
-  label: {
+  inputGroup: { marginBottom: 16 },
+  inputLabel: {
     fontSize: 13,
-    fontWeight: "700",
-    color: "#4B5563",
+    fontWeight: "600",
+    color: "#6B7280",
     marginBottom: 8,
-    marginLeft: 4,
   },
   input: {
     backgroundColor: "#F9FAFB",
-    padding: 16,
-    borderRadius: 12,
-    fontSize: 15,
-    color: "#111827",
-    marginBottom: 20,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-  },
-  row: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  column: {
-    flex: 1,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 8,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: 16,
     borderRadius: 12,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#4B5563",
-  },
-  saveButton: {
-    flex: 1,
     padding: 16,
-    borderRadius: 12,
-    backgroundColor: "#007AFF",
-    alignItems: "center",
-  },
-  saveButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  suggestionItem: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  suggestionName: {
     fontSize: 16,
-    fontWeight: "700",
     color: "#111827",
-    marginBottom: 4,
   },
-  suggestionType: {
-    fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "600",
+  row: { flexDirection: "row", justifyContent: "space-between" },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginRight: 10,
+  },
+  cancelBtnText: { color: "#4B5563", fontSize: 16, fontWeight: "700" },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: "#D4EB9B",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginLeft: 10,
+  },
+  saveBtnDisabled: { opacity: 0.7 },
+  saveBtnText: { color: "#111827", fontSize: 16, fontWeight: "800" },
+
+  aiOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  aiLoadingCard: {
+    backgroundColor: "#111827",
+    padding: 40,
+    borderRadius: 32,
+    alignItems: "center",
+    width: "80%",
+    shadowColor: "#D4EB9B",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+  },
+  aiLoadingTitle: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "800",
+    marginTop: 24,
     marginBottom: 8,
   },
-  suggestionDesc: {
+  aiLoadingSub: {
+    color: "#9CA3AF",
     fontSize: 14,
-    color: "#4B5563",
-    lineHeight: 20,
-    marginBottom: 12,
+    fontWeight: "500",
+    marginBottom: 32,
   },
-  suggestionIngredients: {
-    fontSize: 12,
-    color: "#007AFF",
-    fontWeight: "600",
+  aiCancelBtn: {
+    backgroundColor: "#EF4444",
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: "100%",
+    alignItems: "center",
   },
+  aiCancelText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+
+  // 🚨 NEW RECIPE MODAL STYLES
+  recipeModalContent: {
+    backgroundColor: "#111827",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+    height: "85%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  dragPillDark: {
+    width: 40,
+    height: 5,
+    backgroundColor: "#374151",
+    borderRadius: 5,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  recipeHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  recipeModalTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    marginLeft: 16,
+  },
+
+  recipeCard: {
+    backgroundColor: "#1F2937",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: "#D4EB9B",
+  },
+  recipeText: {
+    fontSize: 16,
+    color: "#D1D5DB",
+    lineHeight: 24,
+    fontWeight: "500",
+  },
+
+  closeRecipeBtn: {
+    backgroundColor: "#D4EB9B",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  closeRecipeBtnText: { color: "#111827", fontSize: 16, fontWeight: "800" },
 });
